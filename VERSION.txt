@@ -1,0 +1,21 @@
+v3.1.0-remix
+
+项目：feiyu-room-themes · 大肥鱼房子主题换装版
+建仓方式：新建独立公开仓库 guo87g9/feiyu-room-themes，基于上游
+sh2234113/feiyu-room-template 复制文件建立的独立二创仓库（非 Fork、不继承上游 git 历史）。
+约定：每次修改模板内容后版本号递增；`package.json` 的 name / version 必须与本文件一致。
+当前包名（示例）：feiyu-room-themes-v3.1.0-remix.zip
+解压目录（示例）：feiyu-room-themes-v3.1.0-remix/
+
+本版本要点：
+- 彻底移除作者自制 3D 模型与第三方安装包，仓库不含任何 .glb / 安装包；
+- 3D 角色改为 actor3d.js 程序化生成，零下载、无加载失败空白；
+- 新增 4 套可切换配色主题（theme.js / THEMES.md），只改渲染层，不改玩法；
+- 统一版本号与文档口径，清理指向不存在文件的 npm scripts 与 remote；
+- 独立新建仓库不继承上游 git 历史，从根源规避历史中残留 .glb 二进制。
+
+双声明：代码 MIT / 2D 立绘素材 dsh-pet CC BY-NC-SA 4.0，两者授权不同，
+**整体仓库不是纯 MIT**，素材以更严格者为准；整体仅作非商业用途。
+保留：LICENSE（含上游两行原版权行 + 追加的 guo87g9 版权行）、ASSET_LICENSES.md、
+THIRD_PARTY_NOTICES.md、PRIVACY_AND_ASSETS.md、INSPIRATION.md、
+public/room/assets/pet/CREDITS.md 与页面底部署名。

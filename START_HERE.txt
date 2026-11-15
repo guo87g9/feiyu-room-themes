@@ -1,0 +1,78 @@
+大肥鱼房子 · 主题换装版 v3.1.0-remix —— 解压后从这里开始
+=================================================
+
+这是一个源码模板，不是免安装 EXE。需要 Node.js、DSH；接 QQ 还需要 SnowLuma 或 NapCat。
+本仓库是基于 / 二次创作自上游 sh2234113/feiyu-room-template（MIT）复制文件建立的独立二创项目，
+不是原创房间；新建独立公开仓库 guo87g9/feiyu-room-themes，不建立 fork 关系、不继承上游 git 历史。
+
+一、准备
+1. Node.js >= 22.13.0
+2. 已安装并启动 DeepSeek Harness（默认 http://127.0.0.1:3080）
+3. 接 QQ 的话，安装 SnowLuma 或 NapCat，并开启 OneBot 11 HTTP + WebSocket
+
+二、安装
+1. 进入本目录，打开 PowerShell
+2. npm ci
+3. Copy-Item config.example.json config.json
+4. 编辑 config.json：
+   - ownerQQ：你的 QQ
+   - allow.private / allow.groups：白名单
+   - consoleToken：一长串随机字符
+   - snowluma.wsUrl / httpUrl / accessToken：SnowLuma 或 NapCat 的地址
+   - gateway：snowluma 或 napcat
+5. node scripts/setup-dsh.mjs
+6. 重启 DSH Web（必须）
+7. npm start
+
+三、打开
+http://127.0.0.1:13100/room/
+
+右上角「主题」下拉可切换 蓝白小屋 / 海边小屋 / 森林木屋 / 中式小院，
+只换配色，不重载页面、不改户型与玩法；选择记在浏览器本地。
+详见 public/room/THEMES.md。
+
+四、3D 角色（本仓库不含任何 3D 模型）
+- 默认 2D 立绘（dsh-pet，CC BY-NC-SA 4.0）；切到 3D 时用纯代码生成的 Q 版角色，
+  不下载任何模型文件，也不会出现加载失败后的空白。
+- 本仓库没有任何作者自制模型、没有「画质」按钮、没有原始工程备份。
+- 如果你自己有合法授权的模型，可自行放入 public/room/assets/models/ 并用
+  ?model=./assets/models/xxx.glb 或 localStorage 配置；授权责任自负。
+  详见 public/room/assets/models/README.md。
+
+五、NapCat
+把 config.json 的 gateway 改成 "napcat"，
+snowluma.wsUrl / httpUrl / accessToken 指向 NapCat。
+详见 docs/guides/NAPCAT.md
+
+六、不要做
+- 不要上传 config.json、state/、audio/ 到公开仓库
+- 不要把别人的照片、语音、聊天记录放进去
+- 不要用手机浏览器投屏（标签页共享只支持桌面 Chrome/Edge）
+- HTTP 局域网 IP 不能投屏；用 localhost 或 HTTPS
+- 不要改动 public/room/assets/pet/ 与 assets/sound/ 下任何素材文件
+- 不要把未授权的 3D 模型、安装包放进仓库
+
+七、详细文档
+README.md
+SETUP.md
+public/room/THEMES.md
+public/room/assets/pet/CREDITS.md
+THIRD_PARTY_NOTICES.md
+PRIVACY_AND_ASSETS.md
+INSPIRATION.md
+docs/REMIX_CHANGES.md
+docs/guides/NAPCAT.md
+
+八、已移除的内容（不要再找、不要再补）
+- 作者自制的 3D 角色模型（含优化展示版与原始工程文件）已彻底移除，
+  本仓库无任何 .glb / .gltf，也不提供下载链接或镜像。
+- 原 tools/ 目录（第三方 AI 管家的 Windows / macOS 安装包）已整体删除，
+  本仓库不再分发任何第三方安装包，也不沿用「已获官方授权」这类表述。
+- 如需这些软件/模型，请自行通过官方渠道获取并自行确认授权；
+  本仓库只保留代码、2D 素材与文档。
+
+九、署名与授权（不可删）
+- 代码 MIT（保留上游版权行与 LICENSE）；2D 素材 dsh-pet CC BY-NC-SA 4.0
+  （署名 · 非商业 · 相同方式共享），详见 CREDITS.md 与页面底部署名。
+- 灵感来源见 INSPIRATION.md，二次发布不得写成「原创」。
+- 本仓库整体仅作非商业用途。
