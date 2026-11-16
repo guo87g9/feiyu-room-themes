@@ -1315,21 +1315,22 @@ if (cfg.socialV2?.voice?.enabled !== false && cfg.socialV2?.tools?.sendVoice !==
 
   server.tool(
     'qq_home_action',
-    '控制「你自己」在大平层里的身体。房间里的角色不是另一只宠物，就是 QQ 里的你本人；你在这里让她去睡觉、去客厅、开灯、吃东西，/room/ 页面会立刻显示同一个你。只在群友/管理员明确让你去某处、睡觉、开灯、摸头、吃东西、喝水、玩一下时使用；不要每轮都调用，不要拿它刷状态，也不要声称“另一个宠物在动”。command 必须给 room + spot，位置 id 可从 qq_get_prompt 的 home.layout.spots 里取（如 living/sofa、kitchen/dining、her_room/bed、corridor/gallery、balcony/rail）。',
+    '控制「你自己」在大平层里的身体。房间里的角色不是另一只宠物，就是 QQ 里的你本人；你在这里让她去睡觉、去客厅、开灯、吃东西，/room/ 页面会立刻显示同一个你。只在群友/管理员明确让你去某处、睡觉、开灯、摸头、吃东西、喝水、玩一下时使用；不要每轮都调用，不要拿它刷状态，也不要声称“另一个宠物在动”。command 必须给 room + spot，位置 id 可从 qq_get_prompt 的 home.layout.spots 里取（如 living/sofa、kitchen/dining、her_room/bed、corridor/gallery、balcony/rail、garden/plot0、waterpark/slide）。想让「你」去水上乐园玩时用 action=waterpark：她会自己走到滑梯下或泳池边，到位后自动爬上塔顶盘旋滑下入水，或直接下水游泳；ride 不给默认滑滑梯。',
     {
       key: z.string().describe('会话 key，格式 group:群号 或 private:QQ号'),
       token: z.string().describe('会话令牌（见唤醒提示中的【会话令牌】）'),
-      action: z.enum(['command', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp']).describe('command=去某个位置；sleep/wake=睡觉/叫醒；lamp=开灯或关灯；其余是日常互动'),
-      room: z.string().optional().describe('command 时的房间 id，例如 living / her_room / kitchen / corridor / balcony'),
-      spot: z.string().optional().describe('command 时的位置 id，例如 sofa / bed / dining / gallery / rail'),
+      action: z.enum(['command', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp', 'waterpark']).describe('command=去某个位置；waterpark=去水上乐园玩（配合 ride）；sleep/wake=睡觉/叫醒；lamp=开灯或关灯；其余是日常互动'),
+      room: z.string().optional().describe('command 时的房间 id，例如 living / her_room / kitchen / corridor / balcony / garden / waterpark'),
+      spot: z.string().optional().describe('command 时的位置 id，例如 sofa / bed / dining / gallery / rail / slide / pool'),
+      ride: z.enum(['slide', 'swim']).optional().describe('waterpark 时玩什么：slide=滑滑梯（默认），swim=下水游泳'),
       on: z.boolean().optional().describe('lamp 时指定开(true)或关(false)，不传则切换'),
       text: z.string().max(120).optional().describe('talk 时的短留言；其他动作忽略')
     },
-    async ({ key, token, action, room, spot, on, text }) => {
+    async ({ key, token, action, room, spot, ride, on, text }) => {
       try {
         const data = await agentApi('/api/socialV2/home-action', {
           method: 'POST',
-          body: JSON.stringify({ key, token, action, room, spot, on, text }),
+          body: JSON.stringify({ key, token, action, room, spot, ride, on, text }),
           headers: { 'x-agent-token': token },
           timeoutMs: 20000
         });

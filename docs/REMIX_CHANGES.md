@@ -29,6 +29,7 @@
 | D-8 | **HC-5 / HC-6 升为必修项**；T1/T2 区分度靠木作明度差与 accent 色相，不自调色值 | `world.js buildLabels` 固定深色字 `0x2c2e33` + 浅色柔光描边；`.foot` 见 D-6；`theme.js` 逐值照抄（实测 oak 1.86:1 / walnut 2.13:1 / darkWood 1.64:1 / accent 色相差 ≈150°，均达标） |
 | D-9 | **U-1 / U-2 授权** | `actor.js` `'da-feiyu-sprite'` → `'pet-sprite'`、`actor3d.js` `'da-feiyu-3d'` → `'procedural-chibi'`（纯内部 Group.name，全仓库无引用）；`package-lock.json` 四处同步 |
 | D-10 | **上游测试可移植性修复**：原作者把自己本机环境假设写进了测试，任何干净检出都会假红 | `scripts/test-preset-prompt.mjs:135` 行尾断言从写死 CRLF 改为按**源文件主导行尾**判定（与 `src/preset-prompt.js:140-142` 的实现规则一致，LF 检出不再必红）；`scripts/test-role-card.mjs:95` 对 `.gitignore` 已排除的 `roles/小鲸鱼.md` 改为文件缺失时跳过、并改用随仓库分发的 `roles/example.md` 验证同一套筛选机制；两处均保留原有全部断言强度，无一条被削弱 |
+| D-11 | **v3.2.0 新增「水上乐园」玩法**：房子 +z 海侧，与 -z 菜园分居两侧 | 新增 `waterpark-world.js`（甲板 / 泳池 / CatmullRom 螺旋滑道 / U 型凹槽扫掠 / 半透明橙护栏 / 塔与楼梯）、`waterpark-client.js`（进入退出、点滑道上滑、点水面下水、演出状态机）、`waterpark-camera.js`（取景）；`home-state.js` 加 `waterpark` 房间与 6 路点 + `OUTDOOR_ROOMS`；`theme.js` 加 25 字段 × 4 套；`app.js` 接按钮 / 镜头 / 点击落点 / 姿态接管；`index.html` 加 `#waterparkChip`。**唯一改动的既有几何**：`world.js buildBalcony` 玻璃栏板在 x 5.1–7.1 开口（含门柱），房间 / 家具 / 碰撞 / 23 热区未动 |
 
 ---
 
@@ -243,3 +244,99 @@
     **绝不重建材质实例**（HC-9b：菜园 8 个引用键会断链）。
   - 本仓库不含、不链接、不声明授权任何 3D 模型文件与第三方安装包。
   - **不做 git commit / push / fork / 建仓**；所有高影响动作仍待用户审批。
+
+---
+
+## 9. v3.2.0 新增：水上乐园
+
+### 9.1 位置与分区
+
+| 区域 | 所在侧 | 边界 |
+| --- | --- | --- |
+| 菜园 `garden` | 房子 **-z**（屋后） | `[-1.05, -7.55, 13.15, -0.25]` |
+| **水上乐园 `waterpark`** | 房子 **+z**（海侧） | `[-1.05, 9.0, 15.0, 25.0]` |
+
+甲板 `16 × 16 m` 自阳台外沿伸出海面；泳池 `4.2 × 7.6 m`（与 `living` 房间同尺寸），
+池底 `y = -1.36`，水面 `y = -0.18`。
+
+### 9.2 新增文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `public/room/waterpark-world.js` | 场景：甲板（泳池处开洞）、池壁/池底/压条/爬梯、水面顶点波动、螺旋滑道、护栏、塔与两跑楼梯、装饰、主题回调 |
+| `public/room/waterpark-client.js` | 交互：`setOpen` / `handlePointer`（点滑道上滑、点水面下水）/ 演出状态机 `getRide` / 水花 / `tick` |
+| `public/room/waterpark-camera.js` | 取景：按可用区域二分求相机半径，海侧回望 |
+| `scripts/test-waterpark.mjs` | 10 项离线单测 |
+
+### 9.3 滑道几何做法
+
+1. `CatmullRomCurve3`（`centripetal`，0.5）串起 47 个盘旋控制点 + 3 个出水点，
+   共 `1.25` 圈、全长约 `17 m`、落差 `4.28 → 0.30`。
+2. 截面为闭合 **U 型槽**：外宽 `1.24`、内宽 `0.88`、壁高 `0.44`、槽底厚 `0.15`，
+   八个折角经 `roundPoly()` 二次贝塞尔圆角（半径 `0.055`）。
+3. `sweepClosed()` 沿曲线扫掠，**帧不做滚转**——`right = T × up`、`upv = right × T`，
+   因此无论坡度多陡，槽口恒定朝上（`ExtrudeGeometry` 的 Frenet 帧会扭，故不用）。
+4. 内壁用更亮橙黄再扫一层，槽内叠加 `sweepRibbon()` 半透明水膜。
+5. 护栏：以同一帧取 `±0.97·外宽`、`壁高 + 0.22` 的偏移点，串 `TubeGeometry`（半径 `0.055`，
+   材质 `opacity 0.55`），另加一道细弧与等距立柱。
+
+### 9.4 桌宠演出
+
+- 点滑道：`climb`（3.4 s，甲板 → 楼梯 → 连桥 → 塔顶）→ `slide`（4.2 s，沿曲线采样，`elev = y + 0.15`）
+  → `splash`（0.62 s，落水 + 水花）→ `swim`（周期起伏）。
+- 点水面：`enter`（0.9 s 下沉）→ `swim`。
+- 演出期间由 `waterpark-client.getRide()` 接管 `displayPos` 与 `elev`；点别处或关闭区域即取消。
+- 演出结束调用 `act('place', { pos, free: true })` 把落点写回服务端，避免下次快照被拽回。
+
+### 9.5 边界与约束
+
+- 服务端 `OUTDOOR_ROOMS` 统一为 `garden / yard / waterpark`，室外走「最近路点」而非室内可见性捷径。
+- 主题热切换沿用 HC-9b：`waterpark-world.js` 只注册一个 `themeHandler`，
+  逐键 `.color.setHex()`，**不 new Material**；`dispose()` 时从 `world.themeHandlers` 摘除。
+- 场景网格经包围盒校验，全部落在甲板范围内（`x -1~15`、`z 9~25`），无越界构件。
+
+### 9.6 QQ 侧控制链路（v3.2.0）
+
+原状：水上乐园只有房间与路点，**没有 spot**，因此 `spotOf('waterpark','slide')` 返回 `null`，
+`qq_home_action` 的 `command` 无法把桌宠派过去。
+
+| 环节 | 改动 |
+| --- | --- |
+| `HOME_LAYOUT.spots.waterpark` | 新增 `deck / pool / slide / lounge` 四个位置（`slide` 的 `access` 指向新增路点 `wp_stair`，避免绕塔基横穿） |
+| `HOME_ACTIONS` | 新增 `waterpark` |
+| `applyHomeAction` | `waterpark` 分支同时设置 `command`（负责寻路）与 `waterparkRide`（负责演出，含 `token` 与 2 分钟有效期）；`go` / `place` / `sleep` / `command` 会清空它，防止残留指令重播 |
+| `homeView.her` | 新增 `waterparkRide: { kind, token, until }`，过期自动不下发 |
+| `waterpark-client.syncState()` | 收到 token 且 `!walking && room==='waterpark'` 时自动开演并打开乐园视角；同 token 不重播 |
+| `bridge.js` | `AGENT_HOME_ACTIONS` 放开 `waterpark`，校验并透传 `ride`（只接受 `slide` / `swim`） |
+| `mcp-snowluma-safe.js` | `qq_home_action` 的 `action` 枚举加 `waterpark`，新增 `ride` 参数，描述补 `/room/` 与位置示例 |
+| `dsh/.../agent.cordis.yml` | 第 18 条补一句「屋前的水上乐园也能去」 |
+| `qq_get_prompt` 的 `home.layout` | **上游缺口**：工具描述与报错都引用 `home.layout.spots`，但此前从未生成。现按 `v2ToolEnabled('homeAction')` 下发 `rooms` / `spots` 紧凑清单 |
+
+链路：QQ 消息 → 模型调 `qq_home_action(action=waterpark, ride=slide)` →
+`POST /api/socialV2/home-action` → `applyHomeAction` → `advanceHomeState` 寻路 →
+`homeView.her.waterparkRide` → 前端 `syncState` 开演。
+
+### 9.7 整体收口测试矩阵（v3.2.0）
+
+`npm run test:controls` 是本次新增的**跨层收口测试**，专治「加了玩法但某条通道没接上」。
+
+| # | 断言组 | 覆盖点 |
+| --- | --- | --- |
+| 1 | 三方动作契约一致 | 解析 `src/bridge.js` 的 `AGENT_HOME_ACTIONS`、`src/mcp-snowluma-safe.js` 的 `action: z.enum([...])` 与运行时 `HOME_ACTIONS`，要求：桥接放行的动作服务端必须认识、MCP 暴露的动作桥接必须放行；`ride` 必须从工具参数一路透传到 `applyHomeAction`；预设必须提到 `action=waterpark` |
+| 2 | 两条新玩法服务端全链路 | `slide` / `swim` 各自 apply → advance → 到位坐标（±0.5 m）→ 视图带 token |
+| 3 | 两条新玩法前端全链路 | `syncState` → 自动开视角 → 演出 → 入水 → 停在泳池范围内 |
+| 4 | 位置全量可达 | 41 个 spot 从客厅出发均有路线且不越界（室内约束仍生效） |
+| 5 | 提示词可见性 | `waterpark/deck|pool|slide|lounge` 在 `listSpots()` 与 `home.layout.spots` 生成逻辑里都在 |
+| 6 | 房间判定与落点 | 泳池中心 / 阳台外沿判为 `waterpark`；甲板落点保真；菜园仍吸附 |
+| 7 | 旧玩法回归 | 5 个室内/菜园 command + 8 个日常互动仍 `changed=true`；空留言与未登记动作仍被拒 |
+| 8 | 不污染菜园 | 去乐园后 `her.gardenWork === null`、dwell 内无 `gardenJobId` |
+| 9 | 主题 × 新场景 | 4 套主题均可构建、换肤复用材质实例、切回还原、`dispose` 只摘自己的回调 |
+| 10 | 子系统共存 | 菜园回调与乐园回调同时存在时互不影响 |
+| 11 | 前端接线静态断言 | 导入 / 按钮 / 点击优先级（乐园先于菜园）/ 落点平面 / 点击行走分支 / 演出接管 / 取景 / 两区互斥 / 阳台栏板开口 |
+| 12 | 甲板落点保真 | 三个坐标点哪走到哪（误差 < 0.05 m） |
+
+**实测**：9 条 `npm run test:*` 全部 `EXIT=0`。
+
+> 说明：`/api/socialV2/home-action` 的真实 HTTP 请求需要 `reserved2` 模式 + 有效 agent token +
+> 已连接的 NapCat，本机无 `state/` 与配置，未做真实 QQ 收发验证；改以「契约一致性 + 同一份
+> `applyHomeAction` 逻辑」覆盖，二者之间的差异只可能是传输层。

@@ -1,6 +1,6 @@
 # feiyu-room-themes · 大肥鱼房子主题换装版
 
-> 当前版本：**`v3.1.0-remix`** · 上游代码来源：[`sh2234113/feiyu-room-template`](https://github.com/sh2234113/feiyu-room-template)（MIT）
+> 当前版本：**`v3.2.0-remix`** · 上游代码来源：[`sh2234113/feiyu-room-template`](https://github.com/sh2234113/feiyu-room-template)（MIT）
 
 [安装指南](SETUP.md) · [生成自己的房子](HOUSE_GENERATION_PROMPT.md) · [GitHub 上传教程](GITHUB_UPLOAD.md) · [主题配置说明](public/room/THEMES.md) · [素材授权矩阵](ASSET_LICENSES.md) · [逐文件改动清单](docs/REMIX_CHANGES.md)
 
@@ -43,7 +43,7 @@
 
 | 场景 | 功能 |
 | --- | --- |
-| 3D 房间 | 客厅、厨房、餐厅、卧室、卫生间、阳台、玄关、走廊、屋后菜园；家具、灯光、昼夜、相机与第一视角；同房间地图寻路、自动避开大件家具 |
+| 3D 房间 | 客厅、厨房、餐厅、卧室、卫生间、阳台、玄关、走廊、屋后菜园、屋前水上乐园；家具、灯光、昼夜、相机与第一视角；同房间地图寻路、自动避开大件家具 |
 | **主题换装** | 一键切换「蓝白小屋（默认）／海边小屋／森林木屋／中式小院」4 套配色；**只改材质、灯光与贴图色值，户型、家具碰撞、寻路、菜园与聊天逻辑完全不变**；选择保存在浏览器本地，刷新后保留。见 [THEMES.md](public/room/THEMES.md) |
 | 3D 角色 | 默认 2D 立绘；切到 3D 时使用**程序化生成的 Q 版角色**（纯代码几何，无模型文件、无下载、无加载失败空白）。可选自定义模型机制见 [models/README.md](public/room/assets/models/README.md) |
 | 角色互动 | 点击移动、长按抓取、摸头/喂食/倒水/陪玩/叫醒、气泡、立绘/3D 模式切换；右侧动作栏可跳舞、伸懒腰、行礼等 |
@@ -51,6 +51,7 @@
 | 电视投屏 | 用 `getDisplayMedia` 把浏览器标签页共享到房间电视；50% / 80% / 全屏 |
 | 跟随一起看 | 左下角立绘陪伴层，可调大小、开关气泡、截取电视画面说观后感 |
 | 菜园 | 8 畦菜地、12 种作物、翻土/播种/浇水/施肥/采收/出售/买种子/买堆肥、自主照料 |
+| **水上乐园**（v3.2.0） | 房子另一侧的海上甲板：**4.2 × 7.6 m 泳池**（与客厅同尺寸）+ **CatmullRom 螺旋滑道**（U 型凹槽截面、圆角倒角、半透明橙色弧形护栏）。点滑道她会爬上塔顶盘旋滑下、入水游泳；点水面直接下水；点甲板任意位置就走到那儿。顶部 `🛝 进入水上乐园` 进入，与菜园互斥切换。**QQ 里也能指挥**：「去滑滑梯」「去游泳」用 `qq_home_action` 的 `action=waterpark` 配 `ride` |
 | QQ 桥接 | 文本、图片、表情、引用、合并转发；两代群聊仿真、角色卡、记忆与白名单 |
 | 本地控制台 | 切换模式、管理白名单、查看日志和 token 用量 |
 
@@ -155,6 +156,8 @@ Windows 也可以双击 `scripts/start.bat`；Linux/macOS 可运行 `./scripts/s
 npm run test:room
 npm run test:home
 npm run test:garden
+npm run test:waterpark
+npm run test:controls
 npm run test:mcp-servers
 ```
 
@@ -162,6 +165,7 @@ npm run test:mcp-servers
 
 - 进入菜园 / 返回小屋正常；
 - 8 块菜畦、12 种作物、自主照料按钮存在；
+- **点「🛝 进入水上乐园」切到甲板视角，点滑道她会爬梯、盘旋下滑入水，点水面会下水游泳，点甲板能走过去；换主题后甲板/池水/滑道配色同步变化**；
 - 电视投屏能选标签页；
 - 「跟随一起看」左下角出现陪伴层，大小滑块、气泡、截屏按钮可用；
 - 右上角「主题」下拉能切换 4 套配色，且不重载页面、不丢角色/菜园状态；
@@ -171,9 +175,13 @@ npm run test:mcp-servers
 
 ```text
 src/                桥接、DSH 客户端、MCP、记忆卡、花园、房间状态
-public/room/        房间前端（Three.js / 菜园 / 电视 / 陪伴层）
+public/room/        房间前端（Three.js / 菜园 / 水上乐园 / 电视 / 陪伴层）
   theme.js          4 套主题的唯一配置表
   THEMES.md         主题清单与「如何加第 5 套」
+  garden-world.js   屋后菜园场景
+  waterpark-world.js 水上乐园场景（甲板 / 泳池 / 螺旋滑道 / U 型槽扫掠）
+  waterpark-client.js 水上乐园交互与桌宠演出状态机
+  waterpark-camera.js 水上乐园取景
   actor3d.js        程序化 3D 角色（默认 3D 模式）
   model-actor.js    可选自定义 GLB 播放器（默认不加载）
 public/console.html 控制台页面

@@ -363,6 +363,52 @@ const GARDEN = {
   }
 };
 
+// ── 水上乐园（§3.9）────────────────────────────────────────────────────────
+// 与菜园同级：同一份主题表驱动甲板 / 池水 / 滑道 / 护栏，换主题不改几何。
+// slide / rail 是这套设施的身份色，跨主题只在明度与暖冷上微调，不换成别的色相。
+const WATERPARK = {
+  blue_white: {
+    deck: 0xc9a97f, deckDark: 0x9b7c58, deckEdge: 0xe3d6c2,
+    water: 0x6fb6d6, waterDeep: 0x2f7fa8, waterShallow: 0x9ad9e8, foam: 0xeaf7fb,
+    tile: 0xdce9f2, tileDark: 0x9fb6c6, coping: 0xf2f7fa,
+    slide: 0xf5a04a, slideInner: 0xffc978, rail: 0xffa552, railPost: 0xf08a3c,
+    tower: 0xd6b98c, towerDark: 0xa9855c,
+    lounge: 0x8fa8c4, umbrella: 0xf2f7fa, umbrellaAlt: 0x4d7fb8,
+    ring: 0xf2b544, ladder: 0xb8c4cc, signBg: 0xeae4d8, signFg: 0x2c3a32,
+    particleWater: 0xd8f2ff, glow: 0xffe0b0
+  },
+  seaside: {
+    deck: 0xd8c19b, deckDark: 0xb09873, deckEdge: 0xf0e5cf,
+    water: 0x63bccb, waterDeep: 0x2f8fa3, waterShallow: 0xa5e3e8, foam: 0xf2fbfa,
+    tile: 0xe0eae4, tileDark: 0xa5bdb8, coping: 0xfaf7ef,
+    slide: 0xf2a14e, slideInner: 0xffc97d, rail: 0xffab5c, railPost: 0xe89040,
+    tower: 0xe0cdb0, towerDark: 0xb59b78,
+    lounge: 0x9dbecb, umbrella: 0xfaf7ef, umbrellaAlt: 0x5f9bb5,
+    ring: 0xf0b552, ladder: 0xc2cdd0, signBg: 0xf0e5cf, signFg: 0x2c3a32,
+    particleWater: 0xe0f7f9, glow: 0xffe7c0
+  },
+  forest: {
+    deck: 0xb08a5c, deckDark: 0x7d5f3c, deckEdge: 0xd8c9ae,
+    water: 0x5f9e94, waterDeep: 0x2f6b62, waterShallow: 0x8fc9bb, foam: 0xeaf5ef,
+    tile: 0xc9cfbf, tileDark: 0x8b927f, coping: 0xeee5d2,
+    slide: 0xe89a44, slideInner: 0xf7c274, rail: 0xf5a04e, railPost: 0xd9822f,
+    tower: 0xa87a4c, towerDark: 0x6f4c2c,
+    lounge: 0x7f8f86, umbrella: 0xf0e8d8, umbrellaAlt: 0x4a7060,
+    ring: 0xe0a83f, ladder: 0xa9aca0, signBg: 0xe2d3b8, signFg: 0x2c3a32,
+    particleWater: 0xd9efe6, glow: 0xffd79a
+  },
+  courtyard: {
+    deck: 0xb98a5e, deckDark: 0x87603c, deckEdge: 0xe8dcc2,
+    water: 0x5f9fa2, waterDeep: 0x2f6f74, waterShallow: 0x93cec9, foam: 0xeef7f4,
+    tile: 0xd5d2c4, tileDark: 0x93917f, coping: 0xf2ece0,
+    slide: 0xe89a48, slideInner: 0xf9c47b, rail: 0xf0a054, railPost: 0xd4822f,
+    tower: 0xa06b45, towerDark: 0x6b452b,
+    lounge: 0x9a8f7c, umbrella: 0xb5503c, umbrellaAlt: 0xf5f0e4,
+    ring: 0xd9a441, ladder: 0x9fa8a8, signBg: 0xe8dcc2, signFg: 0x2c3a32,
+    particleWater: 0xdcefed, glow: 0xffcf87
+  }
+};
+
 function buildTheme(id) {
   const mats = MATS[id];
   const env = ENV[id];
@@ -376,6 +422,7 @@ function buildTheme(id) {
     textures: Object.freeze(TEXTURES[id]),   // §3.8.1 · 18 字段
     sky: Object.freeze(SKY[id]),             // §3.8.2 · 17 字段
     garden: Object.freeze(GARDEN[id]),       // §3.8.3+4 · 38 字段
+    waterpark: Object.freeze(WATERPARK[id]), // §3.9 · 25 字段
     accent: ACCENTS[id]
   });
 }

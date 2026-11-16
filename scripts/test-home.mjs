@@ -281,7 +281,7 @@ test('路点图连通，所有站位对之间都有路线，且不穿墙', () =>
       const oldLength = polylineLength([a.pos, ...oldNodes, b.pos]);
       assert.ok(polylineLength(r.points) <= oldLength + 0.01, `${a.key} -> ${b.key} 比原门洞图更远`);
       for (const p of r.points) {
-        const outdoor = ['garden','yard'].some(id => {
+        const outdoor = ['garden','yard','waterpark'].some(id => {
           const bounds = HOME_LAYOUT.rooms.find(room => room.id === id).bounds;
           return p[0] >= bounds[0] && p[0] <= bounds[2] && p[1] >= bounds[1] && p[1] <= bounds[3];
         });
@@ -289,7 +289,7 @@ test('路点图连通，所有站位对之间都有路线，且不穿墙', () =>
           assert.ok(p[0] >= 0 && p[0] <= HOME_LAYOUT.size.w + 0.01, '路线越界 x');
           assert.ok(p[1] >= 0 && p[1] <= HOME_LAYOUT.size.d + 0.01, '路线越界 z');
         }
-        if (!['garden','yard'].includes(a.room) && !['garden','yard'].includes(b.room)) assert.equal(outdoor, false, '室内路线不应绕到户外');
+        if (!['garden','yard','waterpark'].includes(a.room) && !['garden','yard','waterpark'].includes(b.room)) assert.equal(outdoor, false, '室内路线不应绕到户外');
       }
     }
   }

@@ -79,6 +79,7 @@
 | `textures` | object | `world.repaintThemeTextures()` → 9 张 canvas 贴图 | **§3.8.1 的 18 字段**（`0xRRGGBB` 数值）：`tileKitchenMain/Grout`、`tileBathMain/Grout`、`tileBalconyMain/Grout`、`rugLivingMain/Border/Accent`、`rugBedMain/Border/Accent`、`woodFloorBase/Light`、`notePaper/Tape`、`memoryBoard`、`buildLabelText`。渲染层用 `hexToCss()` 转 CSS 字符串 |
 | `sky` | object | `skyTexture(hour, theme.sky)` 的 **day / dawn / dusk / night 四个分支** | **§3.8.2 的 17 字段**：`dayTop/dayMid/dayLow`、`nightTop/nightMid/nightLow`、`dawnTop/dawnMid/dawnLow`、`duskTop/duskMid/duskLow`、`seaDay/seaDayBottom/seaDusk/seaNight/seaNightBottom`。`updateEnvironment()` 在时段重建天空贴图时仍传当前主题（HC-4 / HC-9） |
 | `garden` | object | `garden-world.js` 的 27 个自有 `M` 键 + 11 个粒子 / 灯光 / 标牌字段 | **§3.8.3 + §3.8.4 的 38 字段**：`soil`…`selected`、`particleWater/particleSeed/particleEarth`、`soilDry/soilWet`、`lanternGlow/lanternEmissive/lanternLight`、`signBg/signFg/signMatureBg`。`timber` / `endgrain` / `darkwood` / `hardware` / `iron` / `ceramic` / `terracotta` / `brass` **直接引用 `world.mats.*` 同一材质实例**（HC-9b），随 `mats` 自动跟随 |
+| `waterpark` | object | `waterpark-world.js` 的 22 个 `M` 键 + `waterMat` / `foamMat` / `glowMat` | **§3.9 的 25 字段**（v3.2.0 新增）：`deck` / `deckDark` / `deckEdge` / `water` / `waterDeep` / `waterShallow` / `foam` / `tile` / `tileDark` / `coping` / `slide` / `slideInner` / `rail` / `railPost` / `tower` / `towerDark` / `lounge` / `umbrella` / `umbrellaAlt` / `ring` / `ladder` / `signBg` / `signFg` / `particleWater` / `glow`。`slide` 与 `rail` 是设施身份色，四套主题只微调明度与冷暖，不换色相 |
 | `INVARIANTS`（模块级导出） | object | 审计用 | **§3.8.5 跨主题不变量**：9 项作物语义色四套同值、`garden.selected` 固定 `0xffda7d`、热区双层描边 `0x2c2e33` + `0xffda7d`、`buildLabelText` `0x2c2e33`、`signFg` `0x2c3a32`、粒子语义色相、天空天体 / 时段判定与强度基准、`screen`/`deskScreen` 内容色、几何量级 |
 
 ### 73 个跨文件字段（HC-9，已全部接入）
@@ -90,7 +91,9 @@
 | `world.js` 天空渐变（§3.8.2） | 17 | `theme.sky` → `skyTexture(hour, sky)` 四时段分支与海面 |
 | `garden-world.js` 自有 `M` 键（§3.8.3） | 27 | `theme.garden` → 27 个自有材质 `.color` |
 | `garden-world.js` 粒子 / 灯光 / 标牌（§3.8.4） | 11 | `theme.garden` → `sprinkle` / 湿度 lerp / 菜牌 `paint()` / 灯笼 `PointLight` |
-| **合计** | **73 + 37（M）= 110 个色值落点** | 主题切换时房间、菜园、窗外同步变化 |
+| `waterpark-world.js`（§3.9，v3.2.0 新增） | 22 | `theme.waterpark` → 甲板 / 池壁 / 池底 / 压条 / 滑道 / 内壁 / 护栏 / 塔 / 躺椅 / 伞 / 泳圈 / 爬梯 / 指示牌 |
+| `waterpark-world.js` 水面 / 水膜 / 气泡 / 灯（§3.9） | 3 | `theme.waterpark` → `waterMat` / `foamMat` / `glowMat` + `PointLight.color` |
+| **合计** | **98 + 37（M）= 135 个色值落点** | 主题切换时房间、菜园、水上乐园、窗外同步变化 |
 
 ### 贴图是怎么在运行时换色的
 

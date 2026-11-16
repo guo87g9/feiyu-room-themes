@@ -5682,10 +5682,21 @@ async function main() {
             home: (() => {
               const now = Date.now();
               const { state: homeState, env } = homeTick(now);
-              return {
+              const view = {
                 ...homeView(homeState, now, env),
                 prompt: buildHomePromptLine(homeState, { now, env, includeIntro: true, lastSummary: null })
               };
+              // qq_home_action 的工具描述承诺「位置 id 从 home.layout.spots 取」，
+              // 但这里此前从未生成过 layout —— 模型只能猜 id。补上紧凑清单（仅开工具时下发）。
+              if (v2ToolEnabled('homeAction')) {
+                view.layout = {
+                  rooms: HOME_LAYOUT.rooms.map((r) => `${r.id}:${r.name}`),
+                  spots: Object.entries(HOME_LAYOUT.spots).flatMap(([room, list]) =>
+                    Object.keys(list).map((spot) => `${room}/${spot}`)
+                  )
+                };
+              }
+              return view;
             })(),
             garden: v2ToolEnabled('gardenState') ? {
               ...homeTick().garden,
@@ -6946,10 +6957,15 @@ async function main() {
           if (!v2SessionAllowed(key)) { sendJson({ ok: false, error: '目标不在当前模式允许范围内' }, 403); return; }
           const keyMatch = /^(group|private):(\d+)$/.exec(key);
           if (!keyMatch) { sendJson({ ok: false, error: 'key 格式应为 group:群号 或 private:QQ号' }, 400); return; }
-          const AGENT_HOME_ACTIONS = new Set(['command', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp']);
+          const AGENT_HOME_ACTIONS = new Set(['command', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp', 'waterpark']);
           const action = String(body.action ?? '').trim();
           if (!AGENT_HOME_ACTIONS.has(action)) {
-            sendJson({ ok: false, error: 'action 只支持 command/pet/poke/feed/water/play/talk/sleep/wake/lamp' }, 400);
+            sendJson({ ok: false, error: 'action 只支持 command/pet/poke/feed/water/play/talk/sleep/wake/lamp/waterpark' }, 400);
+            return;
+          }
+          const ride = body.ride === 'swim' ? 'swim' : 'slide';
+          if (action === 'waterpark' && !['slide', 'swim'].includes(String(body.ride ?? 'slide'))) {
+            sendJson({ ok: false, error: 'ride 只支持 slide（滑滑梯）或 swim（游泳）' }, 400);
             return;
           }
           const room = String(body.room ?? '').trim();
@@ -6972,7 +6988,7 @@ async function main() {
             return;
           }
           const result = applyHomeAction(state, {
-            action, text, room, spot, on: body.on, at: now, by: 'QQ 小蓝鱼', emotion: env.emotion
+            action, text, room, spot, on: body.on, ride, at: now, by: 'QQ 小蓝鱼', emotion: env.emotion
           });
           if (!result.changed) {
             const view = homeView(result.state, now, env);

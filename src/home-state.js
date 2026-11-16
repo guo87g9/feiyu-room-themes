@@ -19,7 +19,7 @@ const MAX_EVENT_LOG = 80;
 const MAX_ELAPSED_HOURS = 8; // 桥接停了一整天，也不让需求一口气爆表
 
 export const HOME_ACTIONS = Object.freeze([
-  'visit', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp', 'command', 'go', 'place', 'sick', 'heal'
+  'visit', 'pet', 'poke', 'feed', 'water', 'play', 'talk', 'sleep', 'wake', 'lamp', 'command', 'go', 'place', 'sick', 'heal', 'waterpark'
 ]);
 
 // 1 世界单位 = 1 米。房间按真实尺寸摆，走道净宽都 ≥ 0.9。
@@ -36,7 +36,9 @@ export const HOME_LAYOUT = Object.freeze({
     { id: 'balcony', name: '阳台', bounds: [0, 7.6, 8.2, 9.0] },
     { id: 'foyer', name: '玄关', bounds: [0, 5.2, 1.4, 7.2] },
     { id: 'garden', name: '菜园', bounds: [-1.05, -7.55, 13.15, -0.25] },
-    { id: 'yard', name: '屋外小径', bounds: [-1.05, -0.25, -0.2, 7] }
+    { id: 'yard', name: '屋外小径', bounds: [-1.05, -0.25, -0.2, 7] },
+    // 水上乐园：与菜园分居房子的两侧（菜园在 -z，乐园在 +z 的海侧）。
+    { id: 'waterpark', name: '水上乐园', bounds: [-1.05, 9.0, 15.0, 25.0] }
   ],
   // spot：pos 是脚底落点；pose 决定立绘高度/动作；facing 是朝向（度，0=北，90=东）。
   spots: {
@@ -84,6 +86,13 @@ export const HOME_LAYOUT = Object.freeze({
       ...Object.fromEntries(Array.from({length: 8}, (_, i) => [`plot${i}`, {pos: [[2,4.7,7.4,10.1][i % 4], i < 4 ? -.9 : -3.6], pose: 'stand', facing: 0, label: `第 ${i + 1} 畦旁`, access: `g_plot${i}`}]))
     },
     yard: { path: { pos: [-.65, 3], pose: 'stand', facing: 0, label: '屋外小径', access: 'yard_mid' } },
+    // 水上乐园：QQ 侧用 waterpark/slide、waterpark/pool 这类 id 直接下发。
+    waterpark: {
+      deck: { pos: [6.2, 12.2], pose: 'stand', facing: 0, label: '甲板上', access: 'wp_deck' },
+      pool: { pos: [6.6, 21.0], pose: 'stand', facing: 180, label: '泳池边', access: 'wp_pool' },
+      slide: { pos: [6.4, 24.2], pose: 'stand', facing: 180, label: '滑梯下', access: 'wp_stair' },
+      lounge: { pos: [10.6, 21.2], pose: 'sit', facing: 200, label: '躺椅上', elev: 0.36, access: 'wp_lounge' }
+    },
     foyer: {
       door: { pos: [0.95, 6.25], pose: 'stand', facing: -90, label: '门口', access: 'foyer' },
       shoe: { pos: [0.85, 5.4], pose: 'stand', facing: -90, label: '鞋柜旁', access: 'shoe' }
@@ -119,8 +128,9 @@ export function normalizeFreePoint(raw, { preserveOutdoor = false } = {}) {
   if (!room) return null;
   // 点击移动仍吸附到菜园安全路点；鼠标拖拽（preserveOutdoor）保留连续落点，
   // 否则从鼠标抬起的位置跳到最近菜畦，观感会一顿一顿的。
-  if (room.id === 'garden' || room.id === 'yard') {
-    if (!preserveOutdoor) {
+  // 水上乐园是一整块无障碍甲板，没有菜畦/围栏那种要避让的格子，点哪就落哪。
+  if (OUTDOOR_ROOMS.has(room.id)) {
+    if (!preserveOutdoor && room.id !== 'waterpark') {
       const node = nearestNodeInRoom([x, z], room.id);
       return node.pos.slice();
     }
@@ -182,6 +192,9 @@ function freeTargetFor(pos, state, now) {
 
 
 // 预置路点：房间内的合法落点 + 门口。移动=沿这些点走直线，不做寻路、不用物理。
+// 室外区域：走「最近路点」而不是室内可见性捷径。
+const OUTDOOR_ROOMS = new Set(['garden', 'yard', 'waterpark']);
+
 const NODES = Object.freeze({
   yard_door: [-.65, 6.25],
   yard_mid: [-.65, 3],
@@ -231,7 +244,15 @@ const NODES = Object.freeze({
   bal_door_out: [6.3, 7.9],
   bal_c: [6.0, 8.4],
   bal_w: [3.0, 8.4],
-  bal_e: [7.6, 8.4]
+  bal_e: [7.6, 8.4],
+  // 水上乐园：阳台栏板开口 → 平台 → 泳池 / 滑梯塔 / 躺椅区。
+  wp_door: [6.2, 9.7],
+  wp_deck: [6.2, 13.2],
+  wp_pool: [6.6, 18.4],
+  wp_pool_n: [6.6, 13.9],
+  wp_slide: [2.6, 20.8],
+  wp_stair: [6.4, 24.2],
+  wp_lounge: [10.6, 21.2]
 });
 
 // 每条边都是「同一房间内直线可达」或「穿过门洞」。不写穿墙的捷径。
@@ -254,7 +275,12 @@ const EDGES = Object.freeze([
   ['bedroom_c', 'beside'], ['bedroom_c', 'desk'], ['bedroom_c', 'wardrobe'], ['bedroom_c', 'window_n'],
   ['corridor', 'corridor_e'], ['corridor_e', 'bath_out'], ['bath_out', 'bath_in'], ['bath_in', 'bath_c'],
   ['bath_c', 'bath_vanity'], ['bath_c', 'bath_toilet'], ['bath_c', 'bath_shower'],
-  ['corridor', 'laundry']
+  ['corridor', 'laundry'],
+  // 水上乐园：阳台东段栏板开口通向平台；平台内部按「绕开泳池」布线。
+  ['bal_e', 'wp_door'], ['wp_door', 'wp_deck'],
+  ['wp_deck', 'wp_pool_n'], ['wp_deck', 'wp_slide'], ['wp_deck', 'wp_lounge'],
+  ['wp_pool_n', 'wp_pool'], ['wp_pool', 'wp_slide'], ['wp_pool', 'wp_lounge'],
+  ['wp_deck', 'wp_stair'], ['wp_stair', 'wp_slide']
 ]);
 
 const ADJ = new Map();
@@ -423,6 +449,8 @@ export function emptyHomeState(now = Date.now()) {
     reactionUntil: 0,
     route: null,
     dwell: null,
+    // 水上乐园演出指令：{ kind:'slide'|'swim', token, until }。到期或换动作即失效。
+    waterparkRide: null,
     nextDecisionAt: 0,
     lastInteractionAt: 0,
     lamp: true,
@@ -757,7 +785,7 @@ export function buildMapRoute(from, target, now, speed = 0.55) {
       if (!edgeMap.get(next).some(([n]) => n === id)) edgeMap.get(next).push([id, w]);
     }
   }
-  const outdoor = (room) => room.id === 'garden' || room.id === 'yard';
+  const outdoor = (room) => OUTDOOR_ROOMS.has(room.id);
   // 室外保持原来的菜畦/小径图：菜畦和围栏不是规则矩形，不能用室内可见性捷径。
   if (outdoor(fromRoom)) addEdge(fromId, nearestNodeInRoom(from, fromRoom.id).id);
   if (outdoor(toRoom)) addEdge(toId, nearestNodeInRoom(toPos, toRoom.id).id);
@@ -1385,6 +1413,7 @@ export function applyHomeAction(state, input = {}) {
     if (!s.walking && !s.dwell) setActivity(s, 'idle', '停下来听你说话，尾巴尖晃了晃', s.pose, s.elev, s.facing);
     event = { type: 'talk', text: `有人留了句话：「${text}」` };
   } else if (action === 'go') {
+    s.waterparkRide = null;
     if (s.asleep) return { state: s, changed: false, event: null };
     const p = normalizeFreePoint(input.pos);
     if (!p) return { state: s, changed: false, event: null };
@@ -1409,6 +1438,7 @@ export function applyHomeAction(state, input = {}) {
     setActivity(s, 'walk', '往你指的地方走', 'stand', 0, s.facing);
     event = { type: 'go', text: '你指了一个地方' };
   } else if (action === 'place') {
+    s.waterparkRide = null;
     if (s.asleep) return { state: s, changed: false, event: null };
     const p = normalizeFreePoint(input.pos, { preserveOutdoor: input.free === true });
     if (!p) return { state: s, changed: false, event: null };
@@ -1430,6 +1460,7 @@ export function applyHomeAction(state, input = {}) {
     setActivity(s, 'idle', '被你放到这里，站稳了', 'stand', 0, s.facing);
     event = { type: 'place', text: '你把她抱到了这里' };
   } else if (action === 'sleep') {
+    s.waterparkRide = null;
     s.command = null;
     s.nextDecisionAt = 0;
     s.sleepPending = true;
@@ -1469,6 +1500,7 @@ export function applyHomeAction(state, input = {}) {
     event = { type: 'lamp', text: s.lamp ? '有人帮你把灯打开了' : '有人帮你把灯关了' };
     emit(s, 'lamp', event.text, now);
   } else if (action === 'command') {
+    s.waterparkRide = null;
     const room = String(input.room || '').trim();
     const spot = String(input.spot || '').trim();
     if (!HOME_LAYOUT.spots[room]?.[spot]) return { state: s, changed: false, event: null };
@@ -1480,6 +1512,20 @@ export function applyHomeAction(state, input = {}) {
     // 清掉 dwell，下一次 advance 立即出发。
     s.dwell = null;
     event = { type: 'command', text: `有人让你去${HOME_LAYOUT.spots[room][spot].label}` };
+  } else if (action === 'waterpark') {
+    // 一条指令搞定「走过去 + 到了就玩」：command 负责寻路，waterparkRide 负责演出。
+    if (s.asleep) return { state: s, changed: false, event: null };
+    const ride = input.ride === 'swim' ? 'swim' : 'slide';
+    const spot = ride === 'swim' ? 'pool' : 'slide';
+    s.command = { room: 'waterpark', spot, until: now + 5 * MIN, by: sanitizeText(input.by, 24) };
+    s.nextDecisionAt = 0;
+    s.reactionUntil = 0;
+    s.sleepPending = false;
+    s.dwell = null;
+    s.route = null;
+    s.walking = false;
+    s.waterparkRide = { kind: ride, token: `${now}:${ride}`, at: now, until: now + 2 * MIN };
+    event = { type: 'waterpark', text: ride === 'slide' ? '有人让你去滑滑梯' : '有人让你去游泳' };
   } else if (action === 'sick') {
     s.needs.pain = 0.82;
     s.needs.energy = Math.min(s.needs.energy, 0.2);
@@ -1582,6 +1628,13 @@ export function homeView(state, now = Date.now(), env = {}) {
       immobile: s.needs.pain >= 0.7,
       busy: !!s.dwell,
       gardenWork: s.dwell?.target?.gardenJobId ? { id: s.dwell.target.gardenJobId, type: s.dwell.target.gardenAction, plotId: s.dwell.target.gardenPlotId, phase: 'working', workUntil: s.dwell.until } : null,
+      // 客户端据此播放滑梯 / 游泳演出；token 用于去重，避免每次快照都重播。
+      waterparkRide: (() => {
+        const r = s.waterparkRide;
+        if (!r || !r.token) return null;
+        if (now >= (Number(r.until) || 0)) return null;
+        return { kind: r.kind === 'swim' ? 'swim' : 'slide', token: String(r.token), until: Number(r.until) || 0 };
+      })(),
       bedsideWater: s.bedsideWater,
       affection: null
     },
@@ -1638,7 +1691,7 @@ export function buildHomePromptLine(state, options = {}) {
   const words = needsWords(s.needs);
   const lines = [];
   if (includeIntro) {
-    lines.push('【你的家】你住在一间大平层里（网页 /room/）：客厅、厨房、你的房间、卫生间、阳台和一条挂着画的走廊。页面里的那个角色就是你本人，不是另一只宠物；QQ 里的你和房间里的你是同一条鱼。聊天之外的时间你会在家里活动，不需要在聊天里逐条汇报，但提到家的时候要按下面的实际情况说。');
+    lines.push('【你的家】你住在一间大平层里（网页 /room/）：客厅、厨房、你的房间、卫生间、阳台和一条挂着画的走廊；屋后有一块菜园，屋前的海面上有一片水上乐园（泳池 + 螺旋滑梯）。页面里的那个角色就是你本人，不是另一只宠物；QQ 里的你和房间里的你是同一条鱼。聊天之外的时间你会在家里活动，不需要在聊天里逐条汇报，但提到家的时候要按下面的实际情况说。');
   }
   if (s.asleep) {
     lines.push(`你现在睡着了（${describeSpot(s.room, s.spot)}${s.bedsideWater ? '，床头还放着半杯水' : ''}）。`);

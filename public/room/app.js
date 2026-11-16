@@ -10,6 +10,8 @@ import { SpriteActor, CLIPS } from './actor.js';
 import { createGardenClient } from './garden-client.js';
 import { createGardenWorld } from './garden-world.js';
 import { getGardenFraming } from './garden-camera.js';
+import { createWaterparkClient } from './waterpark-client.js';
+import { getWaterparkFraming } from './waterpark-camera.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -445,6 +447,9 @@ async function startTvCast() {
 
 const scene = world.scene;
 let gardenController = null;
+let waterparkController = null;
+// 水上乐园演出期间接管桌宠的姿态与高度；结束时清空交回原系统。
+let rideView = null;
 
 // 点击移动用的透明拾取面：放在所有地面装饰之上、家具之下。
 const pickFloor = new THREE.Mesh(
@@ -787,7 +792,7 @@ function legalDragPoint(p) {
   for (const room of rooms) {
     const [x0, z0, x1, z1] = room.bounds;
     if (p[0] >= x0 && p[0] <= x1 && p[1] >= z0 && p[1] <= z1) {
-      if (room.id === 'garden' || room.id === 'yard') {
+      if (room.id === 'garden' || room.id === 'yard' || room.id === 'waterpark') {
         // 和房间一样连续跟随鼠标；不要每一步都吸附到最近的菜畦/门口，
         // 否则拖拽会一跳一跳。服务端 place 会保留这个自由落点。
         const pad = 0.18;
@@ -949,6 +954,7 @@ function charHit(e) {
   return Math.hypot(x - e.clientX, y - e.clientY) < (isTouch ? 80 : 58);
 }
 function onClick(e) {
+  if (waterparkController?.handlePointer(e)) return;
   if (gardenController?.handlePointer(e)) return;
   if (VIEW.mode === 'eyes') return;
   // 点角色优先于点击移动：轻点永远是 Q 弹 + 摸头，不会误触地板。
@@ -962,6 +968,16 @@ function onClick(e) {
     if (!clickMoveOn) return;
     const p = floorPointAt(e);
     if (!p) { toast('点菜园地面，别点房子或围栏'); return; }
+    showClickMarker(p);
+    playTap();
+    act('go', { pos: p });
+    return;
+  }
+  if (waterparkController?.isOpen) {
+    if (!clickMoveOn) return;
+    const p = floorPointAt(e);
+    if (!p) { toast('点甲板地面，别点滑梯或水面'); return; }
+    waterparkController.cancelRide();
     showClickMarker(p);
     playTap();
     act('go', { pos: p });
@@ -1171,6 +1187,11 @@ function floorPointAt(e) {
   if (gardenController?.isOpen) {
     const ground = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.12), new THREE.Vector3());
     if (ground) return [Math.round(ground.x * 1000) / 1000, Math.round(ground.z * 1000) / 1000];
+  }
+  // 水上乐园的甲板顶面在 y=0.02，与室内木地板同一套「点哪走哪」。
+  if (waterparkController?.isOpen) {
+    const deck = raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.02), new THREE.Vector3());
+    if (deck) return [Math.round(deck.x * 1000) / 1000, Math.round(deck.z * 1000) / 1000];
   }
   return null;
 }
@@ -1925,11 +1946,14 @@ function frame(now) {
   const dt = Math.min(0.06, (now - prevT) / 1000);
   prevT = now;
   gardenController?.tick(now);
+  waterparkController?.tick(now);
   updateOpenView(dt);
   updateCamera(dt);
 
   const her = state?.her;
   if (her) {
+    // QQ 侧指令：她走到乐园后自动开演（内部按 token 去重，不会每帧重播）。
+    waterparkController?.syncState(her, now);
     let displayPos = her.pos;
     if (walkPredict && her.walking) {
       const elapsed = Math.max(0, (performance.now() - walkPredict.at) / 1000);
@@ -1938,7 +1962,12 @@ function frame(now) {
     const dragging = !!charDrag?.active;
     if (dragging) displayPos = charDrag.pos;
     else if (placeHold && performance.now() < placeHold.until) displayPos = placeHold.pos;
-    const walkingNow = her.walking && !dragging && !placeHold;
+    // 水上乐园演出（爬梯 / 下坠 / 游泳）优先接管位置与高度。
+    rideView = dragging || placeHold ? null : (waterparkController?.getRide(performance.now(), displayPos) || null);
+    if (rideView) displayPos = [rideView.x, rideView.z];
+    const elevNow = rideView ? rideView.elev : (her.elev || 0);
+    const facingNow = rideView ? rideView.facing : her.facing;
+    const walkingNow = rideView ? !!rideView.walking : (her.walking && !dragging && !placeHold);
     lastDisplayPos = displayPos;
     const backNow = isBackView();
     // 镜头从正面转到侧面时，虽然背面状态没变，也要切到侧跑帧。
@@ -1949,8 +1978,8 @@ function frame(now) {
     }
     lastBackView = backNow;
     world.updateCutaway(camera.position, new THREE.Vector3(displayPos[0], 1, displayPos[1]), VIEW.mode !== 'first' && VIEW.mode !== 'eyes');
-    const facing = (her.facing || 0) * Math.PI / 180;
-    gardenController?.updateCharacter(dragging || placeHold || VIEW.mode === 'eyes' ? { ...her, gardenWork: null } : her, { x: displayPos[0], y: her.elev || 0, z: displayPos[1] }, facing);
+    const facing = (facingNow || 0) * Math.PI / 180;
+    gardenController?.updateCharacter(dragging || placeHold || VIEW.mode === 'eyes' ? { ...her, gardenWork: null } : her, { x: displayPos[0], y: elevNow, z: displayPos[1] }, facing);
     // run_hurry 原片是“朝左跑”：只有侧面跑时按屏幕横向速度决定是否镜像；
     // 正面/背面/待机不镜像，避免左右脸和朝向突然翻面。
     let flip = false;
@@ -1961,11 +1990,12 @@ function frame(now) {
       flip = move.dot(right) > 0.02;
     }
     actor.update(dt, camera, {
-      pos: displayPos, elev: her.elev || 0, walking: walkingNow, flip
+      pos: displayPos, elev: elevNow, walking: walkingNow, flip
     });
     const pose = {
-      pos: displayPos, elev: her.elev, pose: her.pose, kind: her.kind, walking: walkingNow,
-      facing: her.facing, asleep: her.asleep, activity: her.activity, runStyle: her.runStyle
+      pos: displayPos, elev: elevNow, pose: rideView?.swimming ? 'stand' : her.pose,
+      kind: rideView ? (rideView.swimming ? 'swim' : her.kind) : her.kind, walking: walkingNow,
+      facing: facingNow, asleep: rideView ? false : her.asleep, activity: her.activity, runStyle: her.runStyle
     };
     if (modelReady && model3d) {
       model3d.setPose(pose);
@@ -2057,6 +2087,14 @@ function focusGarden() {
   camera.fov=framing.fov;camera.setViewOffset(innerWidth,innerHeight,framing.offsetX,framing.offsetY,innerWidth,innerHeight);
   $('info').classList.add('hide');
 }
+// 水上乐园在房子 +z 侧（海侧），相机从海面回望，房子作为背景。
+function focusWaterpark() {
+  const framing=getWaterparkFraming(innerWidth,innerHeight,$('waterpark-panel')?.getBoundingClientRect().left);
+  setMode('overview');VIEW.follow=false;VIEW.az=framing.az;VIEW.elev=framing.elev;VIEW.radius=framing.radius;
+  VIEW.target.set(...framing.target);world.setLabelsVisible(false);world.setCeilingVisible(false);
+  camera.fov=framing.fov;camera.setViewOffset(innerWidth,innerHeight,framing.offsetX,framing.offsetY,innerWidth,innerHeight);
+  $('info').classList.add('hide');
+}
 function gardenHomeAction(action) {
   if (action === 'talk') {
     const text = window.prompt('留一句话给她：');
@@ -2072,8 +2110,24 @@ function gardenHomeAction(action) {
 }
 if (!SHOT) {
   gardenController=createGardenClient({world,renderer,camera,api,onOpen:focusGarden,onClose:()=>{camera.fov=40;camera.clearViewOffset();resetView();},onHomeAction:gardenHomeAction});
-  $('gardenChip').addEventListener('click',()=>gardenController.toggle());
+  $('gardenChip').addEventListener('click',()=>{
+    // 两个室外区域互斥：先进哪个就先关掉另一个，避免两套镜头框架打架。
+    if(!gardenController.isOpen) waterparkController?.setOpen(false);
+    gardenController.toggle();
+  });
   window.__gardenDebug=()=>gardenController.inspect();
+  waterparkController=createWaterparkClient({
+    world,renderer,camera,
+    onOpen:focusWaterpark,
+    onClose:()=>{camera.fov=40;camera.clearViewOffset();resetView();},
+    // 演出结束后把落点写回服务端，避免下一次状态刷新把人拽回原位。
+    onSettle:(x,z)=>act('place',{pos:[x,z],free:true})
+  });
+  $('waterparkChip').addEventListener('click',()=>{
+    if(!waterparkController.isOpen) gardenController?.setOpen(false);
+    waterparkController.toggle();
+  });
+  window.__waterparkDebug=()=>waterparkController.inspect();
 }
 
 // ── 启动 ──────────────────────────────────────────────────────────────────

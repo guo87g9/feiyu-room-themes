@@ -1641,13 +1641,19 @@ function buildBalcony(world, M) {
   const p = world.root;
   // 玻璃栏板
   const railGlass = M.glass;
+  // 水上乐园开口：x 5.1~7.1 留空，其余栏板照旧。这是本次新增玩法唯一改动的既有几何，
+  // 房间、家具、碰撞与 23 个热区均未触碰（见 REMIX_CHANGES D-11）。
+  const RAIL_GAP = [5.1, 7.1];
   for (let x = 0.1; x < 8.1; x += 1.0) {
+    if (x >= RAIL_GAP[0] - 0.01 && x < RAIL_GAP[1] - 0.01) continue;
     const g = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 1.0), railGlass);
     g.position.set(x + 0.49, 0.55, 8.96);
     p.add(g);
     box(p, 0.035, 1.0, 0.035, M.steel, x, 0.55, 8.96);
   }
-  box(p, 8.1, 0.05, 0.05, M.steel, 4.05, 1.06, 8.96);
+  box(p, RAIL_GAP[0] - 0.1, 0.05, 0.05, M.steel, (0.1 + RAIL_GAP[0]) / 2, 1.06, 8.96);
+  box(p, 8.2 - RAIL_GAP[1], 0.05, 0.05, M.steel, (RAIL_GAP[1] + 8.2) / 2, 1.06, 8.96);
+  for (const gx of RAIL_GAP) box(p, 0.09, 1.12, 0.09, M.steel, gx, 0.56, 8.96);
   for (const z of [7.65, 8.35]) {
     const g = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 1.0), railGlass);
     g.rotation.y = Math.PI / 2;
