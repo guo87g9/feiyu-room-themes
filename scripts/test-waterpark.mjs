@@ -412,3 +412,45 @@ test('泳池水面不接受落点，甲板照常接收', () => {
   assert.deepEqual(normalizeFreePoint([6.6, 21.2]), [6.6, 21.2], '池边应可站立');
   assert.deepEqual(normalizeFreePoint([2.0, 22.0]), [2.0, 22.0], '甲板应可站立');
 });
+
+test('点滑梯：人远时先走过去，到位后才开始爬梯（不瞬移）', async () => {
+  const { createWaterparkClient } = await import('../public/room/waterpark-client.js');
+  const world = makeWorld();
+  const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+  cam.position.set(6.5, 16, 25);
+  cam.lookAt(5.0, 1.0, 19);
+  cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+
+  const goCalls = [];
+  const client = createWaterparkClient({ world, renderer: null, camera: cam, onGo: (p) => goCalls.push(p) });
+  client.setOpen(true);
+
+  // 她站在甲板东侧，离楼梯脚很远
+  client.syncState({ room: 'waterpark', walking: false, pos: [10.6, 21.2] }, 0);
+
+  // 点滑道
+  const p = new THREE.Vector3(2.6, 4.6, 20.8).project(cam); // 瞄准塔身拾取盒中心
+  const screen = { clientX: (p.x * 0.5 + 0.5) * innerWidth, clientY: (-p.y * 0.5 + 0.5) * innerHeight };
+  client.handlePointer(screen, 100);
+
+  assert.equal(client.inspect().ride, null, '人还远时不应立刻开演');
+  assert.equal(client.inspect().pendingSlide, true, '应记下这次点击等落地');
+  assert.equal(goCalls.length, 1, '应下发一次走过去');
+  assert.ok(Math.hypot(goCalls[0][0] - 6.4, goCalls[0][1] - 24.2) < 0.2, `应走向楼梯脚，实际 ${goCalls[0]}`);
+
+  // 路上：仍然不开演
+  client.syncState({ room: 'waterpark', walking: true, pos: [8.0, 23.0] }, 400);
+  assert.equal(client.inspect().ride, null, '路上不应开演');
+
+  // 到位
+  client.syncState({ room: 'waterpark', walking: false, pos: [6.4, 24.2] }, 800);
+  const st = client.inspect();
+  assert.equal(st.pendingSlide, false, '到位后应消费掉待办');
+  assert.equal(st.ride?.kind, 'slide', '到位后才开始爬梯');
+  assert.equal(st.ride?.phase, 'climb');
+
+  // 起手位置必须在楼梯脚附近，而不是她原来站的地方（即没有瞬移）
+  const start = client.getRide(820, [6.4, 24.2]);
+  assert.ok(Math.hypot(start.x - 6.4, start.z - 24.2) < 1.0, `起点应在楼梯脚，实际 ${start.x.toFixed(2)},${start.z.toFixed(2)}`);
+  client.dispose();
+});

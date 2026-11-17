@@ -2142,7 +2142,9 @@ if (!SHOT) {
     onOpen:focusWaterpark,
     onClose:()=>{camera.fov=40;camera.clearViewOffset();resetView();},
     // 演出结束后把落点写回服务端，避免下一次状态刷新把人拽回原位。
-    onSettle:(x,z)=>act('place',{pos:[x,z],free:true})
+    onSettle:(x,z)=>act('place',{pos:[x,z],free:true}),
+    // 点了滑梯但人还远：先让她走到楼梯脚，到位后客户端自己接上爬梯。
+    onGo:(pos)=>{ showClickMarker(pos); playTap(); act('go',{pos}); }
   });
   $('waterparkChip').addEventListener('click',()=>{
     if(!waterparkController.isOpen) gardenController?.setOpen(false);

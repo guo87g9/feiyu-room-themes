@@ -12,7 +12,7 @@ const SWIM_ELEV = -0.68;
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
-export function createWaterparkClient({ world, renderer, camera, onOpen, onClose, onSettle }) {
+export function createWaterparkClient({ world, renderer, camera, onOpen, onClose, onSettle, onGo }) {
   const model = createWaterparkWorld(world, renderer, { quality: world.quality });
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let opened = false;
@@ -59,7 +59,22 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
   // QQ 侧指令：服务端下发 her.waterparkRide 后，等她自己走到位再播演出。
   // token 去重，避免每次快照都重播；只有 state 来源的演出会被状态清除打断。
   let lastRideToken = '';
+  // 点了滑梯但人还离得远：先让服务端把她走到楼梯脚，落地后再开始爬。
+  let lastHer = null;
+  let pendingSlideAt = 0;
+  const STAIR = [climbPath[0][0], climbPath[0][2]];
+  const nearStair = (p) => !!p && Math.hypot(p[0] - STAIR[0], p[1] - STAIR[1]) <= 1.2;
+
   function syncState(her, now) {
+    if (her?.pos) lastHer = her;
+    // 到位判定：不再走路且已经站在楼梯脚，就补上这次点击的爬梯。
+    if (pendingSlideAt) {
+      if (now - pendingSlideAt > 45000) pendingSlideAt = 0;      // 走不到就放弃，别一直挂着
+      else if (her && !her.walking && nearStair(her.pos)) {
+        pendingSlideAt = 0;
+        startSlide(now, 'click');
+      }
+    }
     const cmd = her?.waterparkRide;
     if (!cmd || !cmd.token) return;
     if (cmd.token === lastRideToken) return;
@@ -71,11 +86,13 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
       swimSpot = { x: S.poolEdge.x - 0.6, z: S.poolEdge.z - 1.6 };
       startSwim(now, null, 'state');
     } else {
+      pendingSlideAt = 0;
       startSlide(now, 'state');
     }
   }
 
   function cancelRide() {
+    pendingSlideAt = 0;
     if (!ride) return false;
     ride = null;
     splash.visible = false;
@@ -201,15 +218,20 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     return { pos: [Math.round(p.x * 1000) / 1000, Math.round(p.z * 1000) / 1000] };
   }
 
-  function handlePointer(e) {
+  function handlePointer(e, at) {
     if (!opened) return false;
     ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1);
     ray.setFromCamera(ndc, camera);
     const hit = ray.intersectObjects(model.pickables, true)[0];
     if (!hit) return false;
-    const now = performance.now();
+    const now = at ?? performance.now();
     const kind = hit.object.userData.waterparkPick;
-    if (kind === 'slide') { startSlide(now); return true; }
+    if (kind === 'slide') {
+      // 人不在楼梯脚就先走过去；直接开演会让她贴着甲板"滑"过去，看着像瞬移。
+      if (nearStair(lastHer?.pos)) { startSlide(now); }
+      else { pendingSlideAt = now; onGo?.(STAIR); }
+      return true;
+    }
     if (kind === 'water') {
       swimSpot = { x: hit.point.x, z: hit.point.z };
       startSwim(now, null);
@@ -253,7 +275,7 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     startSwim: (now) => startSwim(now ?? performance.now(), null),
     cancelRide,
     exitWater: () => { ride = null; onSettle?.(S.poolEdge.x, S.poolEdge.z); },
-    inspect: () => ({ open: opened, ride: ride && { kind: ride.kind, phase: ride.phase }, ...model.inspect() }),
+    inspect: () => ({ open: opened, ride: ride && { kind: ride.kind, phase: ride.phase }, pendingSlide: pendingSlideAt > 0, ...model.inspect() }),
     dispose() {
       world.scene.remove(splash);
       splashGeo.dispose(); splashMat.dispose();
