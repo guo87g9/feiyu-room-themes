@@ -322,3 +322,29 @@ test('滑梯整组结构可点击：沿曲线与塔/楼梯打射线必须命中 
   assert.equal(w?.object?.userData?.waterparkPick, 'water', '点水面应判定为下水');
   wp.dispose();
 });
+
+test('不在乐园视角时也能点中甲板，泳池标记为 pool', async () => {
+  const { createWaterparkClient } = await import('../public/room/waterpark-client.js');
+  // 模拟小屋视角：从房子上方看向海侧甲板
+  const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+  cam.position.set(6.3, 15, 3.0);
+  cam.lookAt(6.3, 0.6, 16.5);
+  cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+  const client = createWaterparkClient({ world: makeWorld('blue_white'), renderer: null, camera: cam });
+
+  const toScreen = (x, y, z) => {
+    const v = new THREE.Vector3(x, y, z).project(cam);
+    return { clientX: (v.x * 0.5 + 0.5) * innerWidth, clientY: (-v.y * 0.5 + 0.5) * innerHeight };
+  };
+
+  const deck = client.pickDeck(toScreen(2.0, 0.02, 22.0));
+  assert.ok(deck?.pos, '甲板点应能被拾取');
+  assert.ok(Math.hypot(deck.pos[0] - 2.0, deck.pos[1] - 22.0) < 0.35, `甲板落点偏差过大：${deck.pos}`);
+
+  const pool = client.pickDeck(toScreen(6.6, 0.02, 16.8));
+  assert.equal(pool?.pool, true, '泳池内应标记为 pool');
+
+  assert.equal(client.pickDeck(toScreen(6.3, 0.02, 4.0)), null, '房子方向不应算作甲板');
+  assert.equal(client.pickDeck(toScreen(6.3, 0.02, 26.5)), null, '甲板外海面不应可点');
+  client.dispose();
+});

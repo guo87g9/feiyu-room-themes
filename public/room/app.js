@@ -991,6 +991,19 @@ function onClick(e) {
     act('go', { pos: p });
     return;
   }
+  // 还没进乐园视角时点到甲板：先切视角再走过去。小屋视角下甲板就在画面右下角，
+  // 以前这里落到「点地面，别点墙或家具」——明明看得见却点不着。
+  if (clickMoveOn) {
+    const deck = waterparkController?.pickDeck(e);
+    if (deck) {
+      waterparkController.setOpen(true);
+      if (deck.pool) { waterparkController.startSwim(); return; }
+      showClickMarker(deck.pos);
+      playTap();
+      act('go', { pos: deck.pos });
+      return;
+    }
+  }
   if (clickMoveOn) {
     $('info').classList.add('hide');
     const p = floorPointAt(e);

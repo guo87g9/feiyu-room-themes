@@ -183,6 +183,24 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
   }
 
   /** 点中滑道 → 上滑梯；点中水面 → 下水。返回 true 表示已消费该次点击。 */
+  // 小屋视角下甲板就在画面右下角，点不着会让人以为这功能坏了。
+  // 返回 { pos:[x,z] } = 可站的甲板地面；{ pool:true } = 点在泳池水面上；null = 没点中。
+  const DECK_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), -S.deck.y);
+  const deckHit = new THREE.Vector3();
+  function pickDeck(e) {
+    if (!camera) return null;
+    ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const p = ray.ray.intersectPlane(DECK_PLANE, deckHit);
+    if (!p) return null;
+    const pad = 0.2;
+    if (p.x < S.deck.x0 + pad || p.x > S.deck.x1 - pad) return null;
+    if (p.z < S.deck.z0 + pad || p.z > S.deck.z1 - pad) return null;
+    const inPool = p.x > S.pool.x0 && p.x < S.pool.x1 && p.z > S.pool.z0 && p.z < S.pool.z1;
+    if (inPool) return { pool: true, pos: [p.x, p.z] };
+    return { pos: [Math.round(p.x * 1000) / 1000, Math.round(p.z * 1000) / 1000] };
+  }
+
   function handlePointer(e) {
     if (!opened) return false;
     ndc.set(e.clientX / innerWidth * 2 - 1, -e.clientY / innerHeight * 2 + 1);
@@ -224,6 +242,7 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     setOpen,
     toggle: () => setOpen(!opened),
     handlePointer,
+    pickDeck,
     tick,
     getRide,
     isSwimming,
