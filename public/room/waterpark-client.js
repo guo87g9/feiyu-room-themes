@@ -227,8 +227,10 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     getRide,
     isSwimming,
     syncState,
-    startSlide: () => startSlide(performance.now()),
-    startSwim: () => startSwim(performance.now(), null),
+    // 允许显式传 now：离线测试要能注入固定时间，否则依赖 performance.now()
+    // 的绝对值，进程启动慢一点 dt 就会变成负数。
+    startSlide: (now) => startSlide(now ?? performance.now()),
+    startSwim: (now) => startSwim(now ?? performance.now(), null),
     cancelRide,
     exitWater: () => { ride = null; onSettle?.(S.poolEdge.x, S.poolEdge.z); },
     inspect: () => ({ open: opened, ride: ride && { kind: ride.kind, phase: ride.phase }, ...model.inspect() }),

@@ -125,7 +125,7 @@ test('演出状态机：爬梯 → 下滑 → 入水 → 游泳', async () => {
   const camera = new THREE.PerspectiveCamera(40, 1.6, 0.1, 200);
   const client = createWaterparkClient({ world, renderer: null, camera });
   client.setOpen(true);
-  client.startSlide();
+  client.startSlide(0);  // 固定时间基，别依赖 performance.now() 的绝对值
   const phases = new Set();
   let sawUnderwater = false;
   for (let t = 200; t <= 14000; t += 200) {
