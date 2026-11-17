@@ -1,6 +1,6 @@
 {
   "name": "feiyu-room-themes",
-  "version": "3.2.0-remix",
+  "version": "3.2.1-remix",
   "private": true,
   "license": "MIT",
   "description": "feiyu-room-themes：基于上游模板复制文件建立的独立二创仓库，新增 4 套可切换房间配色主题与程序化 3D 角色，保留上游 DSH + SnowLuma 房间与 QQ 桥接。不含任何 3D 模型与第三方安装包；整体仅非商业。",

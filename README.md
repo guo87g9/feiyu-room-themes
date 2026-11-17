@@ -1,6 +1,6 @@
 # feiyu-room-themes · 大肥鱼房子主题换装版
 
-> 当前版本：**`v3.2.0-remix`** · 上游代码来源：[`sh2234113/feiyu-room-template`](https://github.com/sh2234113/feiyu-room-template)（MIT）
+> 当前版本：**`v3.2.1-remix`** · 上游代码来源：[`sh2234113/feiyu-room-template`](https://github.com/sh2234113/feiyu-room-template)（MIT）
 
 [安装指南](SETUP.md) · [生成自己的房子](HOUSE_GENERATION_PROMPT.md) · [GitHub 上传教程](GITHUB_UPLOAD.md) · [主题配置说明](public/room/THEMES.md) · [素材授权矩阵](ASSET_LICENSES.md) · [逐文件改动清单](docs/REMIX_CHANGES.md)
 
