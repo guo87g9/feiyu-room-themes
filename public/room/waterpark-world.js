@@ -602,6 +602,27 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
     group.add(bulb);
   }
 
+  // 点击热区：滑道管体细、塔和楼梯又不属于滑道网格，只拿 slideMesh 做拾取会出现
+  // 「看着点在滑梯上、射线却穿过去打到地面」→ 变成走过去。这里补不可见拾取体：
+  // 沿曲线套一根粗管（跟着滑道形状走），再给塔/楼梯/连桥两个盒子。
+  const pickMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+  own.add(pickMat);
+  const pickHit = (geo, x, y, z) => {
+    const m = new THREE.Mesh(geo, pickMat);
+    m.position.set(x, y, z);
+    m.userData.waterparkPick = 'slide';
+    m.renderOrder = -2;
+    group.add(m);
+    return m;
+  };
+  const hitProxies = [
+    pickHit(new THREE.TubeGeometry(slideCurve, 72, 0.55, 6, false), 0, 0, 0),
+    pickHit(new THREE.BoxGeometry(3.0, 1.9, 3.0), T.x, T.top + 0.35, T.z),
+    pickHit(new THREE.BoxGeometry(5.4, 4.6, 1.6), 4.3, 2.25, stairZ)
+  ];
+  slideMesh.userData.waterparkPick = 'slide';
+  water.userData.waterparkPick = 'water';
+
   // ── 主题热切换 ──────────────────────────────────────────────────────────
   const ownKeys = Object.keys(M).filter((k) => W[k] !== undefined);
   const themeHandler = (theme) => {
@@ -635,7 +656,8 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
     slideCurve,
     layout: S,
     // 可点击对象：滑道（上滑梯）、水面（下水）、甲板（走过去）
-    pickables: [slideMesh, water],
+    // 每个可点对象都带 userData.waterparkPick（'slide' | 'water'），客户端按标签分派。
+    pickables: [slideMesh, ...hitProxies, water],
     update,
     setTheme: themeHandler,
     inspect: () => ({ meshes: group.children.length, slideTop: S.slide.top, pool: S.pool }),

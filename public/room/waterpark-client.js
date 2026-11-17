@@ -190,8 +190,9 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     const hit = ray.intersectObjects(model.pickables, true)[0];
     if (!hit) return false;
     const now = performance.now();
-    if (hit.object === model.pickables[0]) { startSlide(now); return true; }
-    if (hit.object === model.pickables[1]) {
+    const kind = hit.object.userData.waterparkPick;
+    if (kind === 'slide') { startSlide(now); return true; }
+    if (kind === 'water') {
       swimSpot = { x: hit.point.x, z: hit.point.z };
       startSwim(now, null);
       onSettle?.(S.poolEdge.x, S.poolEdge.z);

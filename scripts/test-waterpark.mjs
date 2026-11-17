@@ -290,3 +290,35 @@ test('端到端：QQ 下发的 waterparkRide 能驱动客户端演出', async ()
   assert.equal(after.phase, before.phase, '阶段不应被重置');
   client.dispose();
 });
+
+test('滑梯整组结构可点击：沿曲线与塔/楼梯打射线必须命中 slide 热区', () => {
+  const world = makeWorld();
+  const wp = createWaterparkWorld(world, null, {});
+  wp.group.updateMatrixWorld(true);
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const probe = (x, y, z) => {
+    ray.set(new THREE.Vector3(x, y, z), down);
+    return ray.intersectObjects(wp.pickables, true)[0];
+  };
+  const miss = [];
+  // 沿滑道整条曲线取样（覆盖盘旋段与出水段）
+  for (let i = 0; i <= 24; i++) {
+    const p = wp.slideCurve.getPointAt(i / 24);
+    const hit = probe(p.x, p.y + 2.4, p.z);
+    const tag = hit?.object?.userData?.waterparkPick;
+    if (tag !== 'slide') miss.push(`curve@${(i / 24).toFixed(2)}→${tag || 'none'}`);
+  }
+  // 塔顶平台、两跑楼梯、连桥
+  for (const p of [[2.6, 6.0, 20.8], [6.4, 5.2, 24.2], [3.4, 5.2, 24.2], [5.4, 5.2, 24.2]]) {
+    const hit = probe(p[0], p[1], p[2]);
+    const tag = hit?.object?.userData?.waterparkPick;
+    if (tag !== 'slide') miss.push(`struct${JSON.stringify(p)}→${tag || 'none'}`);
+  }
+  assert.deepEqual(miss, [], '这些位置点不中滑梯：' + miss.join('; '));
+
+  // 水面仍然归 water，不能被滑梯热区吞掉
+  const w = probe(6.6, 3.0, 15.5);
+  assert.equal(w?.object?.userData?.waterparkPick, 'water', '点水面应判定为下水');
+  wp.dispose();
+});
