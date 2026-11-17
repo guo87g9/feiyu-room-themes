@@ -94,6 +94,8 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+// 上游仓库（更新检查与下载引导都指向它）
+const UPDATE_REPO = 'guo87g9/feiyu-room-themes';
 const STATE_DIR = path.join(ROOT, 'state');
 const STATE_FILE = path.join(STATE_DIR, 'sessions.json');
 const ROLE_STATE_FILE = path.join(STATE_DIR, 'current-role.json');
@@ -3791,8 +3793,8 @@ async function main() {
       })();
       const isRoomSurface = (
         (req.method === 'GET' && (url.pathname === '/room' || url.pathname === '/room/' || url.pathname.startsWith('/room/')))
-        || (req.method === 'GET' && ['/api/home/state', '/api/room/state', '/api/room/inspect', '/api/garden/state'].includes(url.pathname))
-        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control'].includes(url.pathname))
+        || (req.method === 'GET' && ['/api/home/state', '/api/room/state', '/api/room/inspect', '/api/garden/state', '/api/update/info'].includes(url.pathname))
+        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/update/pull'].includes(url.pathname))
       );
       const secFetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
       const siteTrusted = !secFetchSite || secFetchSite === 'same-origin' || secFetchSite === 'none';
@@ -4173,6 +4175,46 @@ async function main() {
           return;
         }
         // ── 大平层：一次交互（写 home.json；摸头/喂食/留言同步旧小屋好感） ────
+        // ── 版本检查 / 一键更新 ───────────────────────────────────────────
+        // 页面上的「更新」按钮先读这里的本地信息，再去 GitHub 查最新 tag。
+        // 查 GitHub 放在浏览器侧做：客户端有系统代理，服务端没有，直连多半不通。
+        if (req.method === 'GET' && url.pathname === '/api/update/info') {
+          let version = '';
+          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').trim(); } catch { /* 没有版本文件就留空 */ }
+          sendJson({
+            ok: true,
+            version,
+            git: fs.existsSync(path.join(ROOT, '.git')),
+            repo: UPDATE_REPO
+          });
+          return;
+        }
+        // 只有 git 检出才能一键更新；解压包形式返回 not-git，让页面引导去下载。
+        if (req.method === 'POST' && url.pathname === '/api/update/pull') {
+          if (!fs.existsSync(path.join(ROOT, '.git'))) {
+            sendJson({ ok: false, reason: 'not-git', error: '这份安装不是 git 检出，请下载新版本覆盖' });
+            return;
+          }
+          const result = await new Promise((resolve) => {
+            const child = spawn('git', ['pull', '--ff-only'], { cwd: ROOT, env: process.env });
+            let out = '';
+            let err = '';
+            const timer = setTimeout(() => { try { child.kill(); } catch { /* ignore */ } resolve({ ok: false, error: 'git pull 超时' }); }, 90000);
+            child.stdout.on('data', (d) => { out += d; });
+            child.stderr.on('data', (d) => { err += d; });
+            child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: String(e?.message || e) }); });
+            child.on('close', (code) => {
+              clearTimeout(timer);
+              if (code === 0) resolve({ ok: true, output: out.trim().slice(-1500), restartRequired: true });
+              else resolve({ ok: false, error: (err || out).trim().slice(-800), output: out.trim().slice(-800) });
+            });
+          });
+          let version = '';
+          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').trim(); } catch { /* ignore */ }
+          sendJson({ ...result, version });
+          return;
+        }
+
         if (req.method === 'POST' && url.pathname === '/api/home/act') {
           const body = await readBody();
           const action = String(body.action || '').trim();

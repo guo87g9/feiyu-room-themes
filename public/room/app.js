@@ -2148,6 +2148,57 @@ if (!SHOT) {
     // 点了滑梯但人还远：先让她走到楼梯脚，到位后客户端自己接上爬梯。
     onGo:(pos)=>{ showClickMarker(pos); playTap(); act('go',{pos}); }
   });
+  // ── 检查上游更新 ───────────────────────────────────────────────────────
+  // 本地版本与是否 git 检出由桥接提供；最新 tag 由浏览器直连 GitHub（客户端有代理，服务端没有）。
+  function versionNum(v) { return String(v).replace(/^[^\d]*/, '').split('-')[0]; }
+  function compareVer(a, b) {
+    const pa = versionNum(a).split('.').map(Number);
+    const pb = versionNum(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const x = pa[i] || 0, y = pb[i] || 0;
+      if (x !== y) return x > y ? 1 : -1;
+    }
+    return 0;
+  }
+  async function fetchLatestTag(repo) {
+    for (const u of [`https://api.github.com/repos/${repo}/releases/latest`, `https://api.github.com/repos/${repo}/tags`]) {
+      try {
+        const r = await fetch(u, { headers: { accept: 'application/vnd.github+json' } });
+        if (!r.ok) continue;
+        const j = await r.json();
+        const tag = Array.isArray(j) ? j[0]?.name : j?.tag_name;
+        if (tag) return tag;
+      } catch { /* 换下一个来源 */ }
+    }
+    return '';
+  }
+  async function runUpdateCheck(auto) {
+    const chip = $('updateChip'), text = $('updateText');
+    if (!chip || chip.dataset.busy === '1') return;
+    chip.dataset.busy = '1';
+    text.textContent = '检查中';
+    try {
+      const info = await fetch('/api/update/info').then((r) => r.json()).catch(() => null);
+      if (!info?.ok) { toast('读取本地版本失败'); return; }
+      const latest = await fetchLatestTag(info.repo);
+      if (!latest) { toast('连不上 GitHub，检查更新失败（可能需要开代理）'); return; }
+      if (compareVer(latest, info.version) <= 0) { if (!auto) toast(`已是最新：${info.version}`); return; }
+      if (info.git) {
+        if (!confirm(`发现新版本 ${latest}（当前 ${info.version}）\n现在拉取更新吗？更新后需要重启桥接。`)) return;
+        text.textContent = '更新中';
+        const r = await fetch('/api/update/pull', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((x) => x.json()).catch(() => null);
+        if (r?.ok) toast(`已更新到 ${r.version || latest}，请重启桥接生效`);
+        else toast(`更新失败：${String(r?.error || '未知错误').slice(0, 50)}`);
+      } else if (confirm(`发现新版本 ${latest}（当前 ${info.version}）\n这份安装不是 git 检出，无法自动更新。\n现在打开下载页面？`)) {
+        window.open(`https://github.com/${info.repo}/releases`, '_blank', 'noopener');
+      }
+    } finally {
+      chip.dataset.busy = '0';
+      text.textContent = '更新';
+    }
+  }
+  $('updateChip')?.addEventListener('click', () => runUpdateCheck(false));
+
   $('waterparkChip').addEventListener('click',()=>{
     if(!waterparkController.isOpen) gardenController?.setOpen(false);
     waterparkController.toggle();

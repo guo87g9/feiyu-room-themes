@@ -288,3 +288,15 @@ test('甲板点击落点保真：点哪走到哪，不吸附到路点', () => {
       `${target} 没走到位，实际 ${her.pos.map((v) => +v.toFixed(2))}`);
   }
 });
+
+test('更新入口接线：按钮 / 检查接口 / 拉取接口都在', () => {
+  const app = read('public/room/app.js');
+  const html = read('public/room/index.html');
+  const bridge = read('src/bridge.js');
+  assert.match(html, /id="updateChip"/, 'index.html 缺更新按钮');
+  assert.match(app, /fetch\('\/api\/update\/info'\)/, 'app 未读取本地版本');
+  assert.match(app, /\/api\/update\/pull/, 'app 未接一键更新');
+  assert.match(bridge, /url\.pathname === '\/api\/update\/info'/, '桥接缺 /api/update/info');
+  assert.match(bridge, /url\.pathname === '\/api\/update\/pull'/, '桥接缺 /api/update/pull');
+  assert.match(bridge, /execFileSync|spawn\('git'/, '一键更新没有调用 git');
+});
