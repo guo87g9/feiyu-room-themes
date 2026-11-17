@@ -348,3 +348,67 @@ test('不在乐园视角时也能点中甲板，泳池标记为 pool', async () 
   assert.equal(client.pickDeck(toScreen(6.3, 0.02, 26.5)), null, '甲板外海面不应可点');
   client.dispose();
 });
+
+// ── 泳池绕行 ────────────────────────────────────────────────────────────────
+import { normalizeFreePoint, listSpots, HOME_NODES } from '../src/home-state.js';
+import { WATERPARK_LAYOUT as WP } from '../public/room/waterpark-world.js';
+
+const POOL_RECT = HOME_LAYOUT.waterparkPool;
+const inPool = (p) => p[0] > POOL_RECT.x0 && p[0] < POOL_RECT.x1 && p[1] > POOL_RECT.z0 && p[1] < POOL_RECT.z1;
+function segCrossEdge(p, q, a, b) {
+  const d = (q[0] - p[0]) * (b[1] - a[1]) - (q[1] - p[1]) * (b[0] - a[0]);
+  if (Math.abs(d) < 1e-12) return false;
+  const t = ((a[0] - p[0]) * (b[1] - a[1]) - (a[1] - p[1]) * (b[0] - a[0])) / d;
+  const u = ((a[0] - p[0]) * (q[1] - p[1]) - (a[1] - p[1]) * (q[0] - p[0])) / d;
+  return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+}
+function routeCrossesPool(points) {
+  const c = [[POOL_RECT.x0, POOL_RECT.z0], [POOL_RECT.x1, POOL_RECT.z0], [POOL_RECT.x1, POOL_RECT.z1], [POOL_RECT.x0, POOL_RECT.z1]];
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i - 1], q = points[i];
+    if (inPool(p) || inPool(q)) return true;
+    for (let k = 0; k < 4; k++) if (segCrossEdge(p, q, c[k], c[(k + 1) % 4])) return true;
+  }
+  return false;
+}
+
+test('服务端泳池矩形与前端场景一致', () => {
+  assert.deepEqual(
+    { x0: POOL_RECT.x0, z0: POOL_RECT.z0, x1: POOL_RECT.x1, z1: POOL_RECT.z1 },
+    { x0: WP.pool.x0, z0: WP.pool.z0, x1: WP.pool.x1, z1: WP.pool.z1 },
+    'HOME_LAYOUT.waterparkPool 必须与 WATERPARK_LAYOUT.pool 相同'
+  );
+});
+
+test('没有路点落在泳池水面里', () => {
+  const bad = Object.entries(HOME_NODES).filter(([id, p]) => id.startsWith('wp_') && inPool(p));
+  assert.deepEqual(bad.map(([id]) => id), [], '这些路点在水中，会导致「从水面上跑过去」');
+});
+
+test('水上乐园内部任意两个站位之间都不跨泳池', () => {
+  const spots = listSpots().filter((s) => s.room === 'waterpark');
+  assert.equal(spots.length, 4);
+  for (const a of spots) {
+    for (const b of spots) {
+      if (a.key >= b.key) continue;
+      const route = buildMapRoute(a.pos, { room: b.room, spot: b.spot }, T0);
+      assert.ok(route, `${a.key} → ${b.key} 没有路线`);
+      assert.equal(routeCrossesPool(route.points), false, `${a.key} → ${b.key} 穿过了泳池`);
+    }
+  }
+});
+
+test('从屋里走到乐园任意位置也绕开泳池', () => {
+  for (const sp of listSpots().filter((s) => s.room === 'waterpark')) {
+    const route = buildMapRoute([6.3, 5.12], { room: sp.room, spot: sp.spot }, T0);
+    assert.ok(route, `${sp.key} 没有路线`);
+    assert.equal(routeCrossesPool(route.points), false, `客厅 → ${sp.key} 穿过了泳池`);
+  }
+});
+
+test('泳池水面不接受落点，甲板照常接收', () => {
+  assert.equal(normalizeFreePoint([6.6, 18.4]), null, '池心不应可站立');
+  assert.equal(normalizeFreePoint([4.9, 19.0]), null, '池内靠边也不应可站立');
+  assert.deepEqual(normalizeFreePoint([6.6, 21.2]), [6.6, 21.2], '池边应可站立');
+  assert.deepEqual(normalizeFreePoint([2.0, 22.0]), [2.0, 22.0], '甲板应可站立');
+});

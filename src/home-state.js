@@ -25,6 +25,10 @@ export const HOME_ACTIONS = Object.freeze([
 // 1 世界单位 = 1 米。房间按真实尺寸摆，走道净宽都 ≥ 0.9。
 export const HOME_LAYOUT = Object.freeze({
   size: { w: 13.2, d: 9.0, h: 2.8, wall: 0.16 },
+  // 泳池水面矩形（世界坐标）。她是走出去的，不是水上漂——寻路必须绕开这里，
+  // 否则会出现「从水面上直接跑过去」。数值必须与 public/room/waterpark-world.js
+  // 的 WATERPARK_LAYOUT.pool 一致，由 test:waterpark 断言。
+  waterparkPool: { x0: 4.5, z0: 13.0, x1: 8.7, z1: 20.6 },
   rooms: [
     { id: 'kitchen', name: '厨房', bounds: [0, 0, 4.2, 3.6] },
     { id: 'dining', name: '餐厅', bounds: [0, 3.6, 4.2, 7.6] },
@@ -89,7 +93,7 @@ export const HOME_LAYOUT = Object.freeze({
     // 水上乐园：QQ 侧用 waterpark/slide、waterpark/pool 这类 id 直接下发。
     waterpark: {
       deck: { pos: [6.2, 12.2], pose: 'stand', facing: 0, label: '甲板上', access: 'wp_deck' },
-      pool: { pos: [6.6, 21.0], pose: 'stand', facing: 180, label: '泳池边', access: 'wp_pool' },
+      pool: { pos: [6.6, 21.2], pose: 'stand', facing: 180, label: '泳池边', access: 'wp_south' },
       slide: { pos: [6.4, 24.2], pose: 'stand', facing: 180, label: '滑梯下', access: 'wp_stair' },
       lounge: { pos: [10.6, 21.2], pose: 'sit', facing: 200, label: '躺椅上', elev: 0.36, access: 'wp_lounge' }
     },
@@ -136,10 +140,11 @@ export function normalizeFreePoint(raw, { preserveOutdoor = false } = {}) {
     }
     const [x0, z0, x1, z1] = room.bounds;
     const pad = 0.18;
-    return [
-      Math.min(x1 - pad, Math.max(x0 + pad, x)),
-      Math.min(z1 - pad, Math.max(z0 + pad, z))
-    ];
+    const cx = Math.min(x1 - pad, Math.max(x0 + pad, x));
+    const cz = Math.min(z1 - pad, Math.max(z0 + pad, z));
+    // 泳池水面不是能站的地方：落点在水里就直接判为非法，别让她"站在水面上"。
+    if (room.id === 'waterpark' && ptInPoolRect([cx, cz], poolWaterRect())) return null;
+    return [cx, cz];
   }
   const [x0, z0, x1, z1] = room.bounds;
   const pad = 0.22;
@@ -245,11 +250,17 @@ const NODES = Object.freeze({
   bal_c: [6.0, 8.4],
   bal_w: [3.0, 8.4],
   bal_e: [7.6, 8.4],
-  // 水上乐园：阳台栏板开口 → 平台 → 泳池 / 滑梯塔 / 躺椅区。
+  // 水上乐园：绕泳池一圈的环路。泳池是实心障碍，路点必须全部落在水面之外，
+  // 否则 Dijkstra 会挑一条「从水上穿过去」的路（以前 wp_deck/wp_pool 就在水里）。
   wp_door: [6.2, 9.7],
-  wp_deck: [6.2, 13.2],
-  wp_pool: [6.6, 18.4],
-  wp_pool_n: [6.6, 13.9],
+  wp_deck: [6.2, 11.9],   // 池北走廊（房子与泳池之间）
+  wp_nw: [3.4, 11.9],     // 西北角
+  wp_ne: [9.8, 11.9],     // 东北角
+  wp_w: [3.4, 16.8],      // 西侧走廊
+  wp_e: [9.8, 16.8],      // 东侧走廊
+  wp_sw: [3.4, 21.8],     // 西南角
+  wp_se: [9.8, 21.8],     // 东南角
+  wp_south: [6.6, 22.2],  // 池南走廊
   wp_slide: [2.6, 20.8],
   wp_stair: [6.4, 24.2],
   wp_lounge: [10.6, 21.2]
@@ -276,11 +287,16 @@ const EDGES = Object.freeze([
   ['corridor', 'corridor_e'], ['corridor_e', 'bath_out'], ['bath_out', 'bath_in'], ['bath_in', 'bath_c'],
   ['bath_c', 'bath_vanity'], ['bath_c', 'bath_toilet'], ['bath_c', 'bath_shower'],
   ['corridor', 'laundry'],
-  // 水上乐园：阳台东段栏板开口通向平台；平台内部按「绕开泳池」布线。
+  // 水上乐园：阳台东段栏板开口通向甲板；甲板内部按「绕泳池环路」布线，
+  // 相邻两点之间的直线都不跨越水面。
   ['bal_e', 'wp_door'], ['wp_door', 'wp_deck'],
-  ['wp_deck', 'wp_pool_n'], ['wp_deck', 'wp_slide'], ['wp_deck', 'wp_lounge'],
-  ['wp_pool_n', 'wp_pool'], ['wp_pool', 'wp_slide'], ['wp_pool', 'wp_lounge'],
-  ['wp_deck', 'wp_stair'], ['wp_stair', 'wp_slide']
+  ['wp_deck', 'wp_nw'], ['wp_deck', 'wp_ne'],
+  ['wp_nw', 'wp_w'], ['wp_ne', 'wp_e'],
+  ['wp_w', 'wp_sw'], ['wp_e', 'wp_se'],
+  ['wp_sw', 'wp_south'], ['wp_se', 'wp_south'],
+  ['wp_w', 'wp_slide'], ['wp_sw', 'wp_slide'],
+  ['wp_se', 'wp_lounge'], ['wp_south', 'wp_lounge'],
+  ['wp_stair', 'wp_slide'], ['wp_stair', 'wp_south']
 ]);
 
 const ADJ = new Map();
@@ -820,7 +836,7 @@ export function buildMapRoute(from, target, now, speed = 0.55) {
   }
   const ids = dijkstraPath(nodeMap, edgeMap, fromId, toId);
   if (!ids) return null;
-  const points = ids.map((id) => nodeMap[id].slice());
+  const points = avoidPool(ids.map((id) => nodeMap[id].slice()));
   const total = polylineLength(points);
   return { points, departAt: now, arriveAt: now + Math.max(1, total / speed * 1000), speed, target };
 }
@@ -838,11 +854,88 @@ export function buildRoute(from, fromSpotDef, target, now, speed = 0.55) {
   const endId = target.access || toSpotDef?.access || nearestNode(toPos).id;
   const nodes = graphPath(startId, endId);
   if (!nodes) return null;
-  const points = [from, ...nodes];
+  const raw = [from, ...nodes];
   const end = toPos.slice();
-  if (Math.hypot(points.at(-1)[0] - end[0], points.at(-1)[1] - end[1]) > 0.04) points.push(end);
+  if (Math.hypot(raw.at(-1)[0] - end[0], raw.at(-1)[1] - end[1]) > 0.04) raw.push(end);
+  const points = avoidPool(raw);
   const total = polylineLength(points);
   return { points, departAt: now, arriveAt: now + Math.max(1, total / speed * 1000), speed, target };
+}
+
+// ── 泳池绕行 ────────────────────────────────────────────────────────────────
+// 室外寻路只把两个端点各自接到最近路点，中间那一段是直线。甲板上的泳池是实心障碍，
+// 不处理就会出现「她直接从水面上跑过去」（只有点泳池才会触发游泳）。这里对跨水面的
+// 那一段做四角绕行：在「起点/终点/泳池四角」上跑一次小规模可见性图。
+const POOL_AVOID_PAD = 0.55;
+// 水面本体：用来判定「这段是否会湿脚」。
+function poolWaterRect() {
+  const p = HOME_LAYOUT.waterparkPool;
+  return { x0: p.x0, x1: p.x1, z0: p.z0, z1: p.z1 };
+}
+// 绕行拐角：在水面外再留出半个身位，别贴着池沿走。
+function poolCornerRect() {
+  const p = HOME_LAYOUT.waterparkPool;
+  return {
+    x0: p.x0 - POOL_AVOID_PAD, x1: p.x1 + POOL_AVOID_PAD,
+    z0: p.z0 - POOL_AVOID_PAD, z1: p.z1 + POOL_AVOID_PAD
+  };
+}
+function ptInPoolRect(pt, r) {
+  return pt[0] > r.x0 && pt[0] < r.x1 && pt[1] > r.z0 && pt[1] < r.z1;
+}
+function segCross(p1, p2, p3, p4) {
+  const d = (p2[0] - p1[0]) * (p4[1] - p3[1]) - (p2[1] - p1[1]) * (p4[0] - p3[0]);
+  if (Math.abs(d) < 1e-12) return false;
+  const t = ((p3[0] - p1[0]) * (p4[1] - p3[1]) - (p3[1] - p1[1]) * (p4[0] - p3[0])) / d;
+  const u = ((p3[0] - p1[0]) * (p2[1] - p1[1]) - (p3[1] - p1[1]) * (p2[0] - p1[0])) / d;
+  return t > 1e-9 && t < 1 - 1e-9 && u > 1e-9 && u < 1 - 1e-9;
+}
+function segHitsRect(p, q, r) {
+  if (ptInPoolRect(p, r) || ptInPoolRect(q, r)) return true;
+  const c = [[r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]];
+  for (let i = 0; i < 4; i += 1) if (segCross(p, q, c[i], c[(i + 1) % 4])) return true;
+  return false;
+}
+/** 返回从 p 到 q 的折线（含首尾）。不跨水面时原样返回两点。 */
+function detourAroundPool(p, q) {
+  const water = poolWaterRect();
+  if (!segHitsRect(p, q, water)) return [p, q];
+  const r = poolCornerRect(); // 只用它取四个绕行拐角
+  const nodes = [p, q,
+    [r.x0, r.z0], [r.x1, r.z0], [r.x1, r.z1], [r.x0, r.z1]];
+  const n = nodes.length;
+  const dist = new Array(n).fill(Infinity);
+  const prev = new Array(n).fill(-1);
+  const done = new Array(n).fill(false);
+  dist[0] = 0;
+  for (let it = 0; it < n; it += 1) {
+    let u = -1, best = Infinity;
+    for (let i = 0; i < n; i += 1) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+    if (u < 0) break;
+    done[u] = true;
+    for (let v = 0; v < n; v += 1) {
+      // 可见性只按水面判定：起点可能就站在池沿的缓冲带里，那不算湿脚。
+      if (done[v] || v === u || segHitsRect(nodes[u], nodes[v], water)) continue;
+      const d = Math.hypot(nodes[u][0] - nodes[v][0], nodes[u][1] - nodes[v][1]);
+      if (dist[u] + d < dist[v]) { dist[v] = dist[u] + d; prev[v] = u; }
+    }
+  }
+  if (!Number.isFinite(dist[1])) return [p, q]; // 兜底：真绕不过就保持原样
+  const path = [];
+  for (let cur = 1; cur !== -1 && cur !== 0; cur = prev[cur]) path.push(nodes[cur]);
+  path.reverse();
+  return [p, ...path];
+}
+/** 把整条路线里所有跨水面的段替换成绕行段。段终点一律保留，避免改变零长度路线的点数。 */
+function avoidPool(points) {
+  if (!Array.isArray(points) || points.length < 2) return points;
+  const out = [points[0]];
+  for (let i = 1; i < points.length; i += 1) {
+    const leg = detourAroundPool(points[i - 1], points[i]);
+    for (let k = 1; k < leg.length - 1; k += 1) out.push(leg[k]);
+    out.push(points[i]);
+  }
+  return out;
 }
 
 export function polylineLength(points) {
