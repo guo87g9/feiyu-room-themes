@@ -249,7 +249,9 @@ test('前端接线没被漏掉：按钮 / 点击 / 落点 / 演出接管 / 栏�
   assert.match(app, /waterparkController\?\.isOpen\)\s*\{[\s\S]{0,200}intersectPlane/, 'floorPointAt 未接甲板平面');
 
   // 点击行走分支
-  assert.match(app, /if \(waterparkController\?\.isOpen\) \{[\s\S]{0,260}act\('go'/, '缺少水上乐园的点击行走分支');
+  assert.match(app, /if \(waterparkController\?\.isOpen\) \{[\s\S]{0,600}act\('go'/, '缺少水上乐园的点击行走分支');
+  // 水里点陆地必须先游上岸，不能直接取消演出
+  assert.match(app, /exitWater\?\.\(performance\.now\(\), ?p\)/, '点陆地时没有走「游到池梯再上岸」的分支');
 
   // 远程指令接管 + 演出姿态接管
   assert.match(app, /waterparkController\?\.syncState\(her, now\)/, '没有接 QQ 指令同步');

@@ -424,6 +424,7 @@ test('点滑梯：人远时先走过去，到位后才开始爬梯（不瞬移�
   const goCalls = [];
   const client = createWaterparkClient({ world, renderer: null, camera: cam, onGo: (p) => goCalls.push(p) });
   client.setOpen(true);
+  world.scene.updateMatrixWorld(true);   // 同上：没有渲染器，需手动刷新世界矩阵
 
   // 她站在甲板东侧，离楼梯脚很远
   client.syncState({ room: 'waterpark', walking: false, pos: [10.6, 21.2] }, 0);
@@ -452,5 +453,75 @@ test('点滑梯：人远时先走过去，到位后才开始爬梯（不瞬移�
   // 起手位置必须在楼梯脚附近，而不是她原来站的地方（即没有瞬移）
   const start = client.getRide(820, [6.4, 24.2]);
   assert.ok(Math.hypot(start.x - 6.4, start.z - 24.2) < 1.0, `起点应在楼梯脚，实际 ${start.x.toFixed(2)},${start.z.toFixed(2)}`);
+  client.dispose();
+});
+
+test('在水里点陆地：先游到池梯再上岸，不再瞬间弹上去', async () => {
+  const { createWaterparkClient } = await import('../public/room/waterpark-client.js');
+  const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+  cam.position.set(6.6, 14, 10); cam.lookAt(6.6, 0, 17);
+  cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+  const goTargets = [];
+  const client = createWaterparkClient({ world: makeWorld(), renderer: null, camera: cam, onGo: (p) => goTargets.push(p) });
+
+  client.syncState({ room: 'waterpark', walking: false, pos: [6.6, 21.0] }, 0);
+  client.startSwim(0);
+  // 让入水动画走完，进入稳定游泳
+  client.getRide(1000, [6.6, 16.8]);
+  const inWater = client.getRide(1200, [6.6, 16.8]);
+  assert.equal(inWater.swimming, true);
+
+  const target = [10.6, 21.2];
+  assert.equal(client.exitWater(2000, target), true, '在水里时应接受上岸请求');
+
+  // 刚请求上岸的那一瞬间，人还在水里，不能直接出现在池梯
+  const start = client.getRide(2000, [6.6, 16.8]);
+  const dStart = Math.hypot(start.x - 6.6, start.z - 21.0);
+  assert.ok(dStart > 2.0, `上岸起手不应在池梯，实际距池梯 ${dStart.toFixed(2)}m`);
+
+  // 中途：仍在往池梯游，且高度还是水下
+  const mid = client.getRide(2000 + 700, [6.6, 16.8]);
+  assert.equal(mid.swimming, true);
+  assert.ok(mid.elev < -0.3, '游动过程应保持在水下');
+
+  // 到梯后出水：位置在池梯，高度从水下往上抬
+  const outStart = client.getRide(2000 + 1500 + 10, [6.6, 16.8]);
+  assert.ok(Math.hypot(outStart.x - 6.6, outStart.z - 21.0) < 0.05, '出水点应在池梯');
+  const outMid = client.getRide(2000 + 1500 + 350, [6.6, 16.8]);
+  assert.ok(outMid.elev > outStart.elev, `出水过程中高度应上升（${outStart.elev.toFixed(2)} → ${outMid.elev.toFixed(2)}）`);
+
+  // 出水完成 → 演出结束，并继续走向目标
+  client.getRide(2000 + 1500 + 700 + 20, [6.6, 16.8]);
+  assert.equal(client.inspect().ride, null, '上岸后应结束演出');
+  assert.deepEqual(goTargets, [target], '上岸后应接着走向目标点');
+  client.dispose();
+});
+
+test('人还在屋里点水面：先走到池边，再原地入水（不瞬移进池）', async () => {
+  const { createWaterparkClient } = await import('../public/room/waterpark-client.js');
+  const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 200);
+  cam.position.set(6.6, 13, 8); cam.lookAt(6.6, -0.2, 17);
+  cam.updateMatrixWorld(true); cam.updateProjectionMatrix();
+  const goTargets = [];
+  const world = makeWorld();
+  const client = createWaterparkClient({ world, renderer: null, camera: cam, onGo: (p) => goTargets.push(p) });
+  client.setOpen(true);
+  world.scene.updateMatrixWorld(true);   // 无渲染器，射线依赖 matrixWorld
+  client.syncState({ room: 'living', walking: false, pos: [2.0, 5.0] }, 0);
+
+  const p = new THREE.Vector3(6.6, -0.18, 16.8).project(cam);
+  client.handlePointer({ clientX: (p.x * 0.5 + 0.5) * innerWidth, clientY: (-p.y * 0.5 + 0.5) * innerHeight }, 100);
+
+  assert.equal(client.inspect().ride, null, '人还远时不应立刻入水');
+  assert.equal(client.inspect().pendingSwim, true, '应记下这次点水');
+  assert.deepEqual(goTargets, [[6.6, 21.0]], '应先走到池边');
+
+  // 到池边 → 从池边入水（起点是池梯，不是屋里的 2,5）
+  client.syncState({ room: 'waterpark', walking: false, pos: [6.6, 21.0] }, 800);
+  const st = client.inspect();
+  assert.equal(st.pendingSwim, false);
+  assert.equal(st.ride?.kind, 'swim');
+  const first = client.getRide(810, [6.6, 21.0]);
+  assert.ok(Math.hypot(first.x - 6.6, first.z - 21.0) < 1.2, `入水起点应在池边，实际 ${first.x.toFixed(2)},${first.z.toFixed(2)}`);
   client.dispose();
 });

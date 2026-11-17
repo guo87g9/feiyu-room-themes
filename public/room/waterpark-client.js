@@ -7,6 +7,8 @@ const CLIMB_MS = 3400;
 const SLIDE_MS = 4200;
 const SPLASH_MS = 620;
 const ENTER_MS = 900;
+const EXIT_MS = 1500;    // 从游泳点游到池梯
+const CLIMBOUT_MS = 700; // 在池梯处出水
 const SWIM_ELEV = -0.68;
 
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -56,12 +58,31 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     splash.visible = false;
   }
 
+  /** 在水里被要求离开：先游到池梯、再出水，最后才走 walkTarget。返回 false 表示本来就没在水里。 */
+  function requestExit(now, walkTarget) {
+    if (!isSwimming()) return false;
+    const from = ride?.from && ride.phase === 'enter'
+      ? ride.from
+      : [swimSpot.x + Math.sin(now * 0.00065) * 0.5, swimSpot.z + Math.cos(now * 0.00048) * 0.34];
+    ride = { kind: 'swim', phase: 'exit', t0: now, from, walkTarget: walkTarget || null };
+    splash.visible = false;
+    return true;
+  }
+
   // QQ 侧指令：服务端下发 her.waterparkRide 后，等她自己走到位再播演出。
   // token 去重，避免每次快照都重播；只有 state 来源的演出会被状态清除打断。
   let lastRideToken = '';
   // 点了滑梯但人还离得远：先让服务端把她走到楼梯脚，落地后再开始爬。
   let lastHer = null;
   let pendingSlideAt = 0;
+  let pendingSwim = null;  // { spot, at }：点了水面但人还远，先走到池边
+  const POOL = S.pool;
+  const nearPool = (p) => {
+    if (!p) return false;
+    const dx = Math.max(POOL.x0 - p[0], 0, p[0] - POOL.x1);
+    const dz = Math.max(POOL.z0 - p[1], 0, p[1] - POOL.z1);
+    return Math.hypot(dx, dz) <= 1.6;
+  };
   const STAIR = [climbPath[0][0], climbPath[0][2]];
   const nearStair = (p) => !!p && Math.hypot(p[0] - STAIR[0], p[1] - STAIR[1]) <= 1.2;
 
@@ -75,6 +96,16 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
         startSlide(now, 'click');
       }
     }
+    if (pendingSwim) {
+      if (now - pendingSwim.at > 45000) pendingSwim = null;
+      else if (her && !her.walking && nearPool(her.pos)) {
+        const spot = pendingSwim.spot;
+        pendingSwim = null;
+        swimSpot = spot;
+        startSwim(now, [S.poolEdge.x, S.poolEdge.z]);
+        onSettle?.(S.poolEdge.x, S.poolEdge.z);
+      }
+    }
     const cmd = her?.waterparkRide;
     if (!cmd || !cmd.token) return;
     if (cmd.token === lastRideToken) return;
@@ -85,6 +116,9 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     if (cmd.kind === 'swim') {
       swimSpot = { x: S.poolEdge.x - 0.6, z: S.poolEdge.z - 1.6 };
       startSwim(now, null, 'state');
+    } else if (isSwimming()) {
+      pendingSlideAt = 0;
+      requestExit(now, STAIR);
     } else {
       pendingSlideAt = 0;
       startSlide(now, 'state');
@@ -93,6 +127,7 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
 
   function cancelRide() {
     pendingSlideAt = 0;
+    pendingSwim = null;
     if (!ride) return false;
     ride = null;
     splash.visible = false;
@@ -155,6 +190,31 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
       swimSpot = { x: model.slideCurve.getPointAt(1).x + 0.3, z: model.slideCurve.getPointAt(1).z - 0.5 };
       ride = { kind: 'swim', phase: 'swim', t0: now };
       return swimPose(now, swimSpot);
+    }
+    if (ride.phase === 'exit') {
+      // 从当前游泳点游到池梯，再出水；以前是直接 cancelRide，人一下弹到池梯上。
+      const t = Math.min(1, dt / EXIT_MS);
+      const k = easeInOut(t);
+      const a = ride.from || [S.poolEdge.x, S.poolEdge.z];
+      if (t >= 1) { ride.phase = 'climbout'; ride.t0 = now; }
+      return {
+        x: lerp(a[0], S.poolEdge.x, k), z: lerp(a[1], S.poolEdge.z, k),
+        elev: SWIM_ELEV, pose: 'stand', swimming: true,
+        facing: Math.atan2(S.poolEdge.x - a[0], -(S.poolEdge.z - a[1])) * 180 / Math.PI
+      };
+    }
+    if (ride.phase === 'climbout') {
+      const t = Math.min(1, dt / CLIMBOUT_MS);
+      if (t >= 1) {
+        const target = ride.walkTarget;
+        ride = null;
+        if (target) onGo?.(target);
+        return { x: S.poolEdge.x, z: S.poolEdge.z, elev: 0.02, pose: 'stand', swimming: false, facing: 0 };
+      }
+      return {
+        x: S.poolEdge.x, z: S.poolEdge.z, elev: lerp(SWIM_ELEV, 0.02, t),
+        pose: 'stand', swimming: true, facing: 0
+      };
     }
     if (ride.phase === 'enter') {
       const t = Math.min(1, dt / ENTER_MS);
@@ -228,14 +288,24 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     const kind = hit.object.userData.waterparkPick;
     if (kind === 'slide') {
       // 人不在楼梯脚就先走过去；直接开演会让她贴着甲板"滑"过去，看着像瞬移。
-      if (nearStair(lastHer?.pos)) { startSlide(now); }
+      if (nearStair(lastHer?.pos)) { pendingSlideAt = 0; startSlide(now); }
+      else if (isSwimming()) { requestExit(now, STAIR); }   // 先游上岸，再走去楼梯
       else { pendingSlideAt = now; onGo?.(STAIR); }
       return true;
     }
     if (kind === 'water') {
-      swimSpot = { x: hit.point.x, z: hit.point.z };
-      startSwim(now, null);
-      onSettle?.(S.poolEdge.x, S.poolEdge.z);
+      // 已经在水里：改个游泳点即可，不必重开一段入水动画。
+      if (isSwimming()) return true;
+      const spot = { x: hit.point.x, z: hit.point.z };
+      // 人还在屋里或甲板另一头时直接入水，就是从几十米外直线沉进池子——必须先走到池边。
+      if (nearPool(lastHer?.pos)) {
+        swimSpot = spot;
+        startSwim(now, [S.poolEdge.x, S.poolEdge.z]);
+        onSettle?.(S.poolEdge.x, S.poolEdge.z);
+      } else {
+        pendingSwim = { spot, at: now };
+        onGo?.([S.poolEdge.x, S.poolEdge.z]);
+      }
       return true;
     }
     return false;
@@ -274,8 +344,9 @@ export function createWaterparkClient({ world, renderer, camera, onOpen, onClose
     startSlide: (now) => startSlide(now ?? performance.now()),
     startSwim: (now) => startSwim(now ?? performance.now(), null),
     cancelRide,
-    exitWater: () => { ride = null; onSettle?.(S.poolEdge.x, S.poolEdge.z); },
-    inspect: () => ({ open: opened, ride: ride && { kind: ride.kind, phase: ride.phase }, pendingSlide: pendingSlideAt > 0, ...model.inspect() }),
+    // 点陆地时调用：在水里就播"游到池梯→出水→再走向目标"，不在水里返回 false 交给调用方
+    exitWater: (now, walkTarget) => requestExit(now ?? performance.now(), walkTarget),
+    inspect: () => ({ open: opened, ride: ride && { kind: ride.kind, phase: ride.phase }, pendingSlide: pendingSlideAt > 0, pendingSwim: !!pendingSwim, ...model.inspect() }),
     dispose() {
       world.scene.remove(splash);
       splashGeo.dispose(); splashMat.dispose();

@@ -985,6 +985,8 @@ function onClick(e) {
     if (!clickMoveOn) return;
     const p = floorPointAt(e);
     if (!p) { toast('点甲板地面，别点滑梯或水面'); return; }
+    // 还在水里：先游到池梯再上岸，走位交给 onGo 在出水后继续；不要直接取消演出。
+    if (waterparkController.exitWater?.(performance.now(), p)) return;
     waterparkController.cancelRide();
     showClickMarker(p);
     playTap();
