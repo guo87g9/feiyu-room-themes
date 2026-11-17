@@ -725,8 +725,6 @@ let charDrag = null;
 let placeHold = null;
 let last = { x: 0, y: 0 };
 let moved = 0;
-// 「开放」视角下拖拽无效这件事只提示一次，别每拖一下弹一次。
-let camMouseHinted = false;
 
 // 开放视角：用移动键改变观察位置/方向，不依赖右键拖拽。
 const openViewKeys = new Set();
@@ -900,13 +898,13 @@ canvas.addEventListener('pointermove', (e) => {
     if (Math.hypot(e.clientX - charPress.startX, e.clientY - charPress.startY) > 8) clearCharPress();
   }
   if (!isTouch && !cameraUsesMouse()) {
-    // 「开放」视角只吃键盘，鼠标拖拽无效；但滚轮缩放不受这个开关管，
-    // 于是很容易被当成「镜头坏了，只能放大缩小」。拖够距离就提示一次。
-    if (!camMouseHinted && moved > 24) {
-      camMouseHinted = true;
-      toast('当前是「开放」视角，只能用键盘转；想用鼠标拖动请点顶部「左键」或「组合」');
+    // 「开放」视角按设计只吃键盘，但用户既然已经在拖鼠标，意图就是「我要用鼠标转」。
+    // 直接升到「组合」——它是「开放」的超集，WASD/方向键全都还在，不需要为用鼠标去找开关。
+    if (cameraMode === 'open' && moved > 24) {
+      setCameraMode('both');
+    } else {
+      return;
     }
-    return;
   }
   if (VIEW.mode === 'overview') {
     VIEW.az -= dx * 0.0045;
