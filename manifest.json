@@ -1,6 +1,6 @@
 {
   "version": "v3.2.2-remix",
-  "generated": "2026-11-18T04:55:16.416Z",
+  "generated": "2026-11-18T05:17:47.945Z",
   "files": {
     ".gitignore": "bfba36a2196aa00554bf04fb89eed7944d752eec36ecd91d7e402714d11927cb",
     "CHANGELOG.md": "d0bef2a32dfd4f2cf186286e5d404e9c292df878099257af78205ece36a745f3",
@@ -103,7 +103,7 @@
     "public/room/vendor/three.module.js": "76dea8151bc9352aef3528b4262e249b2604f62543828328db978d060d61a495",
     "public/room/waterpark-camera.js": "a1c59e8641b65d913166a6c45bb19a103e6518a3abac217746096270bd055181",
     "public/room/waterpark-client.js": "d3762fa74fa2433014f2c1984f8fb3e268da03aa01bdefdc06b7761dc63bc8d3",
-    "public/room/waterpark-world.js": "3b1df63aa6dbf22c2a13628b2cd4cf87a402ab32f624a6512d1ee3088720a2fd",
+    "public/room/waterpark-world.js": "63fb2749a6d6f303b3fe7690d064057b3fa89610643293eb6db9c7def984dc94",
     "public/room/world.js": "093c58cb6d8707c1e5aa8818aa01af7c8c3ccbdc8dee9033523bc55f9794e6f3",
     "scripts/build-agent-preset-patches.mjs": "f1091909c6f03b9efa2a0e0a01d08e8a8550163a07e720b1cf84a92bde445850",
     "scripts/home-preview.mjs": "84d7564bdeaf151997862cab04d328dafd66c7ddd074c0403e2a7fc23be4359a",

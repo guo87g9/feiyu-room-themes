@@ -10,7 +10,7 @@ export const WATERPARK_LAYOUT = Object.freeze({
   // 客厅 bounds 为 4.2 × 7.6，泳池按同一尺寸下挖。
   pool: { x0: 4.5, z0: 13.0, x1: 8.7, z1: 20.6, surface: -0.18, floor: -1.36, wall: 0.24 },
   tower: { x: 2.6, z: 20.8, top: 4.32, column: 0.3, platform: 1.3 },
-  slide: { a0: -Math.PI / 2, turns: 1.25, top: 4.28, drop: 3.44 },
+  slide: { a0: -Math.PI / 2, turns: 1.0, top: 4.28, drop: 3.44 },
   // 桌宠下水/上岸用的池边点（脚底坐标）。
   poolEdge: { x: 6.6, z: 21.0 },
   slideExit: { x: 5.6, z: 17.4 },
@@ -332,8 +332,8 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
     ctrl.push(new THREE.Vector3(T.x + Math.cos(ang) * r, y, T.z + Math.sin(ang) * r));
   }
   // 出水段：甩向泳池，末端悬在水面上方
-  ctrl.push(new THREE.Vector3(4.75, 0.62, 19.6));
-  ctrl.push(new THREE.Vector3(5.3, 0.4, 18.3));
+  ctrl.push(new THREE.Vector3(4.9, 0.55, 19.05));
+  ctrl.push(new THREE.Vector3(5.45, 0.37, 18.2));
   ctrl.push(new THREE.Vector3(S.slideExit.x, 0.3, S.slideExit.z));
   const slideCurve = new THREE.CatmullRomCurve3(ctrl, false, 'centripetal', 0.5);
 
@@ -414,11 +414,11 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
   const stepRun = 0.26, stepRise = 0.27;
   const flight = (x0, z0, y0, steps, dir) => {
     for (let i = 0; i < steps; i++) {
-      const st = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, stepRun + 0.03), M.tower);
+      const st = new THREE.Mesh(new THREE.BoxGeometry(stepRun + 0.03, 0.1, 1.0), M.tower);
       st.position.set(x0 + dir * i * stepRun, y0 + i * stepRise + 0.05, z0);
       st.castShadow = true;
       walk.add(st);
-      const riser = new THREE.Mesh(new THREE.BoxGeometry(1.0, stepRise, 0.04), M.towerDark);
+      const riser = new THREE.Mesh(new THREE.BoxGeometry(0.04, stepRise, 1.0), M.towerDark);
       riser.position.set(x0 + dir * i * stepRun, y0 + i * stepRise - stepRise / 2 + 0.05, z0);
       walk.add(riser);
     }
