@@ -10,6 +10,7 @@ import os from 'node:os';
 import http from 'node:http';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { isUpdatablePath } from './update-paths.js';
 import { execFileSync, spawn } from 'node:child_process';
 import yaml from 'js-yaml';
 import { extractPresetPrefix, presetPromptBlockers, presetPromptWarnings, renderPresetPromptYaml } from './preset-prompt.js';
@@ -96,6 +97,29 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 // 上游仓库（更新检查与下载引导都指向它）
 const UPDATE_REPO = 'guo87g9/feiyu-room-themes';
+// 本地可更新文件的 sha256 快照，页面用它和远端 manifest 比对，只下载有变化的文件。
+let hashCache = { at: 0, data: null };
+function localHashes() {
+  if (hashCache.data && Date.now() - hashCache.at < 30000) return hashCache.data;
+  const out = {};
+  const walk = (dir) => {
+    let ents = [];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const ent of ents) {
+      const abs = path.join(dir, ent.name);
+      const rel = path.relative(ROOT, abs).replace(/\\/g, '/');
+      if (ent.isDirectory()) {
+        if (['.git', 'node_modules', 'state'].includes(ent.name)) continue;
+        walk(abs);
+      } else if (isUpdatablePath(rel) && rel !== 'manifest.json') {
+        try { out[rel] = crypto.createHash('sha256').update(fs.readFileSync(abs)).digest('hex'); } catch { /* 跳过读失败 */ }
+      }
+    }
+  };
+  walk(ROOT);
+  hashCache = { at: Date.now(), data: out };
+  return out;
+}
 const STATE_DIR = path.join(ROOT, 'state');
 const STATE_FILE = path.join(STATE_DIR, 'sessions.json');
 const ROLE_STATE_FILE = path.join(STATE_DIR, 'current-role.json');
@@ -3794,7 +3818,7 @@ async function main() {
       const isRoomSurface = (
         (req.method === 'GET' && (url.pathname === '/room' || url.pathname === '/room/' || url.pathname.startsWith('/room/')))
         || (req.method === 'GET' && ['/api/home/state', '/api/room/state', '/api/room/inspect', '/api/garden/state', '/api/update/info'].includes(url.pathname))
-        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/update/pull'].includes(url.pathname))
+        || (req.method === 'POST' && ['/api/home/act', '/api/room/act', '/api/room/chat', '/api/tv/opinion', '/api/garden/act', '/api/garden/control', '/api/update/pull', '/api/update/apply'].includes(url.pathname))
       );
       const secFetchSite = String(req.headers['sec-fetch-site'] || '').toLowerCase();
       const siteTrusted = !secFetchSite || secFetchSite === 'same-origin' || secFetchSite === 'none';
@@ -4180,15 +4204,69 @@ async function main() {
         // 查 GitHub 放在浏览器侧做：客户端有系统代理，服务端没有，直连多半不通。
         if (req.method === 'GET' && url.pathname === '/api/update/info') {
           let version = '';
-          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').trim(); } catch { /* 没有版本文件就留空 */ }
+          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').split('\n')[0].trim(); } catch { /* 没有版本文件就留空 */ }
           sendJson({
             ok: true,
             version,
             git: fs.existsSync(path.join(ROOT, '.git')),
-            repo: UPDATE_REPO
+            repo: UPDATE_REPO,
+            hashes: localHashes()
           });
           return;
         }
+        // zip 安装的自更新：浏览器（有代理）下载文件内容，POST 过来由服务端落盘。
+        // 只接受白名单路径，跳过 config.json / state / .git / node_modules。
+        if (req.method === 'POST' && url.pathname === '/api/update/apply') {
+          let body;
+          try {
+            body = await new Promise((resolve, reject) => {
+              const chunks = []; let total = 0;
+              req.on('data', (c) => {
+                total += c.length;
+                if (total > 24 * 1024 * 1024) { reject(new Error('too large')); try { req.destroy(); } catch { /* ignore */ } return; }
+                chunks.push(c);
+              });
+              req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+              req.on('error', reject);
+            });
+          } catch { sendJson({ ok: false, error: '请求体过大' }, 413); return; }
+          let payload;
+          try { payload = JSON.parse(body || '{}'); } catch { sendJson({ ok: false, error: 'JSON 解析失败' }, 400); return; }
+          const list = Array.isArray(payload.files) ? payload.files : [];
+          if (!list.length) { sendJson({ ok: false, error: '没有文件' }, 400); return; }
+          if (list.length > 800) { sendJson({ ok: false, error: '文件数量过多' }, 400); return; }
+          const rejected = [];
+          const written = [];
+          for (const f of list) {
+            const rel = String(f?.path || '');
+            if (!isUpdatablePath(rel)) { rejected.push(rel); continue; }
+            const buf = f?.enc === 'base64' ? Buffer.from(String(f.data || ''), 'base64') : Buffer.from(String(f.data ?? ''), 'utf8');
+            if (buf.length > 4 * 1024 * 1024) { rejected.push(rel + '(过大)'); continue; }
+            const abs = path.resolve(path.join(ROOT, rel));
+            if (!abs.startsWith(path.resolve(ROOT) + path.sep)) { rejected.push(rel); continue; }
+            try {
+              fs.mkdirSync(path.dirname(abs), { recursive: true });
+              const tmp = abs + '.upd-tmp';
+              fs.writeFileSync(tmp, buf);
+              fs.renameSync(tmp, abs);
+              written.push(rel);
+            } catch (e) {
+              rejected.push(rel + '(' + String(e?.code || e?.message || e).slice(0, 24) + ')');
+            }
+          }
+          hashCache = { at: 0, data: null };
+          let version = '';
+          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').split('\n')[0].trim(); } catch { /* ignore */ }
+          sendJson({
+            ok: rejected.length === 0,
+            written: written.length,
+            rejected,
+            version: payload.version || version,
+            restartRequired: true
+          });
+          return;
+        }
+
         // 只有 git 检出才能一键更新；解压包形式返回 not-git，让页面引导去下载。
         if (req.method === 'POST' && url.pathname === '/api/update/pull') {
           if (!fs.existsSync(path.join(ROOT, '.git'))) {
@@ -4210,7 +4288,7 @@ async function main() {
             });
           });
           let version = '';
-          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').trim(); } catch { /* ignore */ }
+          try { version = fs.readFileSync(path.join(ROOT, 'VERSION.txt'), 'utf8').split('\n')[0].trim(); } catch { /* ignore */ }
           sendJson({ ...result, version });
           return;
         }

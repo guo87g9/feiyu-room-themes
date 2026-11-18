@@ -1,5 +1,18 @@
 # 版本记录
 
+## v3.2.2-remix
+
+> 让「更新」按钮在 zip 解压包上真正可用。
+
+- **浏览器下载 + 桥接落盘**：服务端直连 GitHub 不通（只有浏览器走系统代理），
+  所以更新流程改为：前端取 `manifest.json` → 与本地 sha256 比对 → 只下载有变化的文件
+  （二进制走 base64）→ `POST /api/update/apply` 由桥接写入磁盘。
+- **写入白名单**（`src/update-paths.js`）：只允许 `public/ src/ scripts/ docs/`
+  与几个根文件；`config.json`、`state/`、`.git/`、`node_modules/` 一律拒绝，
+  并挡住 `../` 穿越与绝对路径。
+- **manifest 生成**：`npm run manifest` 产出 `manifest.json`（版本 + 169 个文件的 sha256），发版前跑一次。
+- 版本比对与本地哈希来自 `GET /api/update/info`（哈希 30s 缓存）。
+
 ## v3.2.1-remix
 
 > 水上乐园交付后的修复合集。只有行为修正与测试，没有新增区域。

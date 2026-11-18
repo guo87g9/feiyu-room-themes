@@ -1,11 +1,11 @@
-v3.2.1-remix
+v3.2.2-remix
 
 项目：feiyu-room-themes · 大肥鱼房子主题换装版
 建仓方式：新建独立公开仓库 guo87g9/feiyu-room-themes，基于上游
 sh2234113/feiyu-room-template 复制文件建立的独立二创仓库（非 Fork、不继承上游 git 历史）。
 约定：每次修改模板内容后版本号递增；`package.json` 的 name / version 必须与本文件一致。
-当前包名（示例）：feiyu-room-themes-v3.2.1-remix.zip
-解压目录（示例）：feiyu-room-themes-v3.2.1-remix/
+当前包名（示例）：feiyu-room-themes-v3.2.2-remix.zip
+解压目录（示例）：feiyu-room-themes-v3.2.2-remix/
 
 本版本要点：
 - 彻底移除作者自制 3D 模型与第三方安装包，仓库不含任何 .glb / 安装包；

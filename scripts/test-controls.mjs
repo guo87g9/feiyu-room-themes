@@ -300,3 +300,16 @@ test('更新入口接线：按钮 / 检查接口 / 拉取接口都在', () => {
   assert.match(bridge, /url\.pathname === '\/api\/update\/pull'/, '桥接缺 /api/update/pull');
   assert.match(bridge, /execFileSync|spawn\('git'/, '一键更新没有调用 git');
 });
+
+test('更新写入白名单：只允许代码目录，挡住配置与运行态', async () => {
+  const { isUpdatablePath } = await import('../src/update-paths.js');
+  for (const ok of ['public/room/app.js', 'src/bridge.js', 'scripts/test-home.mjs',
+    'package.json', 'package-lock.json', 'VERSION.txt', 'CHANGELOG.md', 'manifest.json']) {
+    assert.equal(isUpdatablePath(ok), true, `应允许：${ok}`);
+  }
+  for (const bad of ['config.json', 'state/home.json', '.git/config', 'node_modules/x/index.js',
+    '../outside.js', 'public/../../etc/passwd', '/abs/path.js', 'C:/Windows/x.js',
+    'public\\\\..\\\\..\\\\x.js', '']) {
+    assert.equal(isUpdatablePath(bad), false, `不应允许：${bad}`);
+  }
+});

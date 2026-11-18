@@ -2189,8 +2189,44 @@ if (!SHOT) {
         const r = await fetch('/api/update/pull', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then((x) => x.json()).catch(() => null);
         if (r?.ok) toast(`已更新到 ${r.version || latest}，请重启桥接生效`);
         else toast(`更新失败：${String(r?.error || '未知错误').slice(0, 50)}`);
-      } else if (confirm(`发现新版本 ${latest}（当前 ${info.version}）\n这份安装不是 git 检出，无法自动更新。\n现在打开下载页面？`)) {
-        window.open(`https://github.com/${info.repo}/releases`, '_blank', 'noopener');
+      } else {
+        // zip 安装：浏览器（走系统代理）下载变更文件，交给桥接落盘。
+        // 服务端直连 GitHub 不通，所以下载必须放在前端做。
+        if (!confirm(`发现新版本 ${latest}（当前 ${info.version}）\n现在下载并更新吗？更新后需要重启桥接。`)) return;
+        text.textContent = '下载清单';
+        const repo = info.repo, ref = 'main';
+        let manifest = null;
+        try {
+          const r = await fetch(`https://raw.githubusercontent.com/${repo}/${ref}/manifest.json`, { cache: 'no-store' });
+          if (r.ok) manifest = await r.json();
+        } catch { /* 下面统一提示 */ }
+        if (!manifest?.files) { toast('取更新清单失败：连不上 GitHub（需要开代理）'); return; }
+        const local = info.hashes || {};
+        const changed = Object.keys(manifest.files).filter((f) => local[f] !== manifest.files[f]);
+        if (!changed.length) { toast(`已是最新：${info.version}`); return; }
+        const BIN = /\.(wav|mp3|ogg|png|jpe?g|webp|gif|glb|webm|mp4|ico|woff2?)$/i;
+        const toB64 = (buf) => {
+          const bytes = new Uint8Array(buf);
+          let s = '';
+          for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+          return btoa(s);
+        };
+        const files = [];
+        for (const f of changed) {
+          text.textContent = `下载 ${files.length + 1}/${changed.length}`;
+          const r = await fetch(`https://raw.githubusercontent.com/${repo}/${ref}/${f}`, { cache: 'no-store' });
+          if (!r.ok) { toast(`下载失败：${f}`); return; }
+          files.push(BIN.test(f)
+            ? { path: f, enc: 'base64', data: toB64(await r.arrayBuffer()) }
+            : { path: f, data: await r.text() });
+        }
+        text.textContent = '写入中';
+        const res = await fetch('/api/update/apply', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ version: manifest.version, files })
+        }).then((x) => x.json()).catch(() => null);
+        if (res?.ok) toast(`已更新 ${res.written} 个文件到 ${res.version || manifest.version}；刷新页面并重启桥接生效`);
+        else toast(`写入失败：${(res?.rejected || []).slice(0, 2).join('、') || '未知错误'}`);
       }
     } finally {
       chip.dataset.busy = '0';
