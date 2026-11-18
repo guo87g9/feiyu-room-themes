@@ -411,7 +411,11 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
   const stairZ = S.deck.z1 - 0.8;
   const walk = new THREE.Group();
   group.add(walk);
-  const stepRun = 0.26, stepRise = 0.27;
+  // 阶梯尺寸：原来 run 0.26 / rise 0.27 ≈ 46°，太陡；改成 run 0.34 / rise 0.25 ≈ 36°。
+  // 总高 2×STEPS 级正好落在连桥高度上，末端与连桥同高、同一 x 区间，不再悬空。
+  const STEPS = 9;
+  const stepRun = 0.34;
+  const stepRise = (T.top + 0.02 - S.deck.y - 0.05) / (2 * STEPS - 1);
   const flight = (x0, z0, y0, steps, dir) => {
     for (let i = 0; i < steps; i++) {
       const st = new THREE.Mesh(new THREE.BoxGeometry(stepRun + 0.03, 0.1, 1.0), M.tower);
@@ -423,14 +427,21 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
       walk.add(riser);
     }
   };
-  // 第一跑：从东向西 8 级
-  flight(6.4, stairZ, S.deck.y, 8, -stepRun);
+  const runA = (STEPS - 1) * stepRun;              // 单跑水平跨度
+  const stairX0 = 8.72;                            // 起步在东侧，跑完正好落在连桥下方
+  const xEndA = stairX0 - runA;                    // 第一跑末级
+  const landY = S.deck.y + STEPS * stepRise;       // 中间平台高度
+  const landX = xEndA - 0.5;
+  const startB = landX - 0.5;
+  const xEndB = startB - runA;                     // 第二跑末级（应正对连桥）
+  // 第一跑：从东向西
+  flight(stairX0, stairZ, S.deck.y, STEPS, -stepRun);
   const landing = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.1), M.tower);
-  landing.position.set(6.4 - 8 * stepRun - 0.4, S.deck.y + 8 * stepRise + 0.05, stairZ);
+  landing.position.set(landX, landY + 0.05, stairZ);
   walk.add(landing);
-  // 第二跑：继续向西 8 级到平台高度
-  flight(6.4 - 8 * stepRun - 0.95, stairZ, S.deck.y + 8 * stepRise, 8, -stepRun);
-  // 连桥：从楼梯顶接到平台北缘
+  // 第二跑：继续向西，末端与连桥同高
+  flight(startB, stairZ, landY, STEPS, -stepRun);
+  // 连桥：从楼梯顶接到平台
   const bridgeZ0 = stairZ, bridgeZ1 = T.z + T.platform;
   const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, Math.abs(bridgeZ1 - bridgeZ0)), M.tower);
   bridge.position.set(T.x, T.top + 0.02, (bridgeZ0 + bridgeZ1) / 2);
@@ -442,8 +453,8 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
   }
   // 楼梯扶手：沿两跑斜梁各抬 0.95m，带立柱
   for (const [ax, ay, bx, by] of [
-    [6.4, S.deck.y, 6.4 - 8 * stepRun, S.deck.y + 8 * stepRise],
-    [6.4 - 8 * stepRun - 0.95, S.deck.y + 8 * stepRise, 6.4 - 16 * stepRun - 0.95, S.deck.y + 16 * stepRise]
+    [stairX0, S.deck.y, xEndA, S.deck.y + (STEPS - 1) * stepRise],
+    [startB, landY, xEndB, landY + (STEPS - 1) * stepRise]
   ]) {
     const len = Math.hypot(bx - ax, by - ay);
     for (const dz of [-0.46, 0.46]) {
@@ -470,8 +481,8 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
       walk.add(beam);
     }
   };
-  stringer(6.4, S.deck.y, 6.4 - 8 * stepRun, S.deck.y + 8 * stepRise, stairZ);
-  stringer(6.4 - 8 * stepRun - 0.95, S.deck.y + 8 * stepRise, 6.4 - 16 * stepRun - 0.95, S.deck.y + 16 * stepRise, stairZ);
+  stringer(stairX0, S.deck.y, xEndA, S.deck.y + (STEPS - 1) * stepRise, stairZ);
+  stringer(startB, landY, xEndB, landY + (STEPS - 1) * stepRise, stairZ);
   // 楼梯落地支撑柱
   for (const [sx, sz, sh] of [[6.3, stairZ, 0.0], [2.2, stairZ, S.deck.y + 15 * stepRise]]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, sh > 0 ? sh : 0.1, 8), M.towerDark);

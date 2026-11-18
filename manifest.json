@@ -1,6 +1,6 @@
 {
   "version": "v3.2.2-remix",
-  "generated": "2026-11-18T05:17:47.945Z",
+  "generated": "2026-11-18T05:22:59.744Z",
   "files": {
     ".gitignore": "bfba36a2196aa00554bf04fb89eed7944d752eec36ecd91d7e402714d11927cb",
     "CHANGELOG.md": "d0bef2a32dfd4f2cf186286e5d404e9c292df878099257af78205ece36a745f3",
@@ -103,7 +103,7 @@
     "public/room/vendor/three.module.js": "76dea8151bc9352aef3528b4262e249b2604f62543828328db978d060d61a495",
     "public/room/waterpark-camera.js": "a1c59e8641b65d913166a6c45bb19a103e6518a3abac217746096270bd055181",
     "public/room/waterpark-client.js": "d3762fa74fa2433014f2c1984f8fb3e268da03aa01bdefdc06b7761dc63bc8d3",
-    "public/room/waterpark-world.js": "63fb2749a6d6f303b3fe7690d064057b3fa89610643293eb6db9c7def984dc94",
+    "public/room/waterpark-world.js": "b97b10a78206efc6650c9f273c80f53c0233ca500773fdf431948d38362e015c",
     "public/room/world.js": "093c58cb6d8707c1e5aa8818aa01af7c8c3ccbdc8dee9033523bc55f9794e6f3",
     "scripts/build-agent-preset-patches.mjs": "f1091909c6f03b9efa2a0e0a01d08e8a8550163a07e720b1cf84a92bde445850",
     "scripts/home-preview.mjs": "84d7564bdeaf151997862cab04d328dafd66c7ddd074c0403e2a7fc23be4359a",
@@ -135,7 +135,7 @@
     "src/affinity.js": "0f6be82a1c40ed627b70984ed97a48f9db4d0b666c0397e6f1eafb7002f6de92",
     "src/breeze-tts.js": "0fdaa3247060e34c2c8bbe9c3abf5745d58e4299592d4c52cd103c342f21454e",
     "src/breeze-voices.js": "9bf0bb43515cf69c4cced597cf9ab826004cad8bcf880b4221868ba4988e11e1",
-    "src/bridge.js": "4adc62c8dada7b5bc48999f84c751c037181e6d6131117d916a1fc51fb6e2e32",
+    "src/bridge.js": "0d1759dcbdb5cd6ce6497d4d1322e4f353e2e64e333ebd29074007a996e1dadb",
     "src/core/session-router.mjs": "1f42d5bef184319c7bb57ec50f7019398bdafc0b585432c8265c6e6d6cff2a42",
     "src/core/session-router.test.mjs": "1aa2fc4644f349f48b3821e5f63a769b4678bcf2e432b8847c68ff64702f7349",
     "src/dsh-client.js": "486abc011901f9c1f48828182270c109a37e00f70d8327b952f921d52d3ff78f",
