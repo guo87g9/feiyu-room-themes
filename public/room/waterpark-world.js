@@ -435,12 +435,12 @@ export function createWaterparkWorld(world, renderer, { quality = 'balanced' } =
   const startB = landX - 0.5;
   const xEndB = startB - runA;                     // 第二跑末级（应正对连桥）
   // 第一跑：从东向西
-  flight(stairX0, stairZ, S.deck.y, STEPS, -stepRun);
+  flight(stairX0, stairZ, S.deck.y, STEPS, -1);
   const landing = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.1), M.tower);
   landing.position.set(landX, landY + 0.05, stairZ);
   walk.add(landing);
   // 第二跑：继续向西，末端与连桥同高
-  flight(startB, stairZ, landY, STEPS, -stepRun);
+  flight(startB, stairZ, landY, STEPS, -1);
   // 连桥：从楼梯顶接到平台
   const bridgeZ0 = stairZ, bridgeZ1 = T.z + T.platform;
   const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, Math.abs(bridgeZ1 - bridgeZ0)), M.tower);
